@@ -1,0 +1,54 @@
+# fly.toml file generated for srve-minio on 2023-02-09T12:39:46+08:00
+
+app = "srve-minio"
+kill_signal = "SIGINT"
+kill_timeout = 5
+processes = []
+
+[build]
+  dockerfile = "./srve-minio.Dockerfile"
+
+[env]
+
+[experimental]
+  auto_rollback = true
+
+[mounts]
+  source="miniodata"
+  destination="/data"
+
+
+[[services]]
+  http_checks = []
+  internal_port = 9000
+  processes = ["app"]
+  protocol = "tcp"
+  script_checks = []
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 9001
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 9000
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 443
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
+
+  [[services.tcp_checks]]
+    grace_period = "1s"
+    interval = "15s"
+    restart_limit = 5
+    timeout = "2s"

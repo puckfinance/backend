@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "module": "commonjs",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "removeComments": true,
+    "esModuleInterop": false,
+    "resolveJsonModule": true,
+    "target": "ES2019",
+    "noImplicitAny": true,
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "outDir": "dist",
+    "baseUrl": "./src",
+    "paths": {
+      "*": ["./src/*"]
+    },
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "__tests__/redis.test.ts"]
+}

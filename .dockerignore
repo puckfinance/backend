@@ -1,0 +1,20 @@
+# flyctl launch added from .gitignore
+# editor
+**/vscode
+**/.DS_Store
+
+# packages
+**/node_modules
+**/yarn.lock
+**/npm-debug.log
+
+# build
+**/dist
+
+# environment configs
+**/.env
+**/.env.local
+
+# flyctl launch added from .husky/_/.gitignore
+.husky/_/**/*
+fly.toml

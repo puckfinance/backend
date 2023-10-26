@@ -1,0 +1,14 @@
+stages:
+  - production
+
+production:
+  only:
+    - express-rest
+  stage: production
+  script:
+    - docker build -t api .
+    - docker ps --quiet --filter="name=api" | xargs --no-run-if-empty docker rm -f
+    - docker run -dt -p 8083:8083 --restart always --name api api
+    - docker image prune -f
+  tags:
+    - api_tag

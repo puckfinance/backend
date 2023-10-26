@@ -1,0 +1,45 @@
+# Use postgres/example user/password credentials
+version: '3.1'
+
+services:
+  db:
+    image: bitnami/postgresql
+    restart: always
+    environment:
+      POSTGRES_USER: srve
+      POSTGRES_PASSWORD: S3CReTP4SSW0RDSRVE
+    ports:
+      - 5444:5432
+    volumes:
+      - postgresql:/bitnami/postgresql
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis:/data
+  minio:
+    image: docker.io/bitnami/minio:2022
+    restart: always
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=miniotest
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio:/data
+
+  # srve-backend:
+  #   image: srve-backend
+  #   ports:
+  #     - 8080:8080
+  #   env_file:
+  #     - .env.local
+
+    
+volumes:
+  postgresql:
+  redis:
+  minio:
