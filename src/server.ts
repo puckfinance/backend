@@ -3,7 +3,6 @@ import { createServer, Server } from 'http';
 import { SystemDefaults } from './constants';
 
 import * as dotenv from 'dotenv';
-import redisClient from './services/redis';
 import { run } from './app';
 
 dotenv.config();
@@ -53,7 +52,6 @@ class MainServer {
    * @lastModifyDate 01/04/2020
    */
   private listen(): void {
-    redisClient.init();
     this.server.listen(this.port, () => {
       console.log('*** Listening on port: %s ***', this.port);
     });

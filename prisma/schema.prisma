@@ -1,226 +1,42 @@
-generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl"]
-}
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// generator dbml {
-//   provider = "prisma-dbml-generator"
-// }
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-enum UserType {
-  CHEF
-  CONSUMER
-}
-
 model User {
-  id                    String    @id @default(uuid())
-  email                 String?   @unique
-  email_verified        Boolean?  @default(false)
-  password              String?
-  phone_number          String?   @unique
-  phone_number_verified Boolean?  @default(false)
-  user_name             String?
-  address               String?
-  zip_code              String?
-  avatar_url            String?
-  user_type             UserType  @default(CONSUMER)
-  chef_type             ChefType? @relation(fields: [chef_type_id], references: [id])
-  chef_type_id          String?
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @default(now()) @updatedAt
-  accounts              Account[]
-  profile               Profile?
-  events                Event[]   @relation(name: "FK_Event_Consumer")
-  chef_events           Event[]   @relation(name: "FK_Event_Chef")
-  ratings               Rating[]  @relation(name: "RatingUser")
+  id        String     @id @default(uuid())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  email     String     @unique
+  password  String
+  TradeLog  TradeLog[]
 }
 
-enum EventStatus {
-  REQUEST_SENT
-  CHEF_ACCEPTED
-  CHEF_ARRIVED
-  FOOD_PREPARING
-  FOOD_READY
-  FOOD_SERVING
-  FOOD_SERVED
-  CHEF_LEFT
+model TradeLog {
+  id              String    @id @default(uuid())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  date            DateTime
+  pair            String
+  risk            Float
+  entryPrice      Float
+  stoplossPrice   Float
+  takeprofitPrice Float
+  note            String
+  side            TradeSide
+  screenshotUrl   String?
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
 }
 
-model Cuisine {
-  id         String   @id @default(cuid())
-  name       String
-  price      Int      @default(0)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  events     Event[]  @relation(name: "EventCuisine")
-}
-
-model Transaction {
-  id                   String   @id @default(cuid())
-  amount               Int
-  amount_capturable    Int?
-  amount_received      Int?
-  currency             String
-  description          String
-  payment_method_types String[]
-  status               String
-  created_at           DateTime @default(now())
-  updated_at           DateTime @default(now()) @updatedAt
-  event                Event?   @relation(fields: [event_id], references: [id])
-  event_id             String?
-}
-
-model Rating {
-  id         String       @id @default(cuid())
-  rating     Int          @default(0)
-  created_at DateTime     @default(now())
-  updated_at DateTime     @default(now()) @updatedAt
-  user       User         @relation(name: "RatingUser", fields: [user_id], references: [id])
-  user_id    String
-  comments   CommentTag[] @relation(name: "RatingComment")
-  review     String       @default("")
-}
-
-model CommentTag {
-  id         String   @id @default(cuid())
-  name       String
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  ratings    Rating[] @relation(name: "RatingComment")
-}
-
-model Ingredient {
-  id         String   @id @default(cuid())
-  name       String
-  icon       String   @default("")
-  price      Int      @default(0)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  events     Event[]  @relation(name: "EventIngredient")
-}
-
-model Occasion {
-  id         String   @id @default(cuid())
-  name       String
-  price      Int      @default(0)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  events     Event[]  @relation(name: "EventOccasion")
-}
-
-model AddOn {
-  id         String   @id @default(cuid())
-  name       String
-  price      Int      @default(0)
-  icon       String   @default("")
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  events     Event[]  @relation(name: "EventAddOn")
-}
-
-model ServingStyle {
-  id         String   @id @default(cuid())
-  name       String
-  price      Int      @default(0)
-  icon       String   @default("")
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  events     Event[]  @relation(name: "EventServingStyle")
-}
-
-model ChefType {
-  id         String   @id @default(cuid())
-  name       String
-  price      Int      @default(0)
-  icon       String   @default("")
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  events     Event[]  @relation(name: "EventChefType")
-  chefs      User[]
-}
-
-model Address {
-  id         String   @id @default(cuid())
-  address    String
-  zip_code   String
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  event      Event?
-  event_id   String?
-}
-
-model SittingStyle {
-  id         String   @id @default(cuid())
-  name       String
-  price      Int      @default(0)
-  icon       String   @default("")
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-  events     Event[]  @relation(name: "EventSittingStyle")
-}
-
-model Event {
-  id             String         @id @default(cuid())
-  title          String
-  start_date     DateTime
-  end_date       DateTime
-  time           String         @default("")
-  created_at     DateTime       @default(now())
-  updated_at     DateTime       @default(now()) @updatedAt
-  creator        User           @relation(name: "FK_Event_Consumer", fields: [creator_id], references: [id])
-  creator_id     String
-  cuisines       Cuisine[]      @relation(name: "EventCuisine")
-  ingredients    Ingredient[]   @relation(name: "EventIngredient")
-  occasions      Occasion[]     @relation(name: "EventOccasion")
-  add_ons        AddOn[]        @relation(name: "EventAddOn")
-  serving_styles ServingStyle[] @relation(name: "EventServingStyle")
-  chef_types     ChefType[]     @relation(name: "EventChefType")
-  chef           User?          @relation(name: "FK_Event_Chef", fields: [chef_id], references: [id])
-  chef_id        String?
-  sitting_styles SittingStyle[] @relation(name: "EventSittingStyle")
-  address        Address?       @relation(references: [id], fields: [address_id], onDelete: Cascade)
-  address_id     String?        @unique
-  party_size     Int?
-  status         EventStatus    @default(REQUEST_SENT)
-  transactions   Transaction[]
-}
-
-model Account {
-  id                  String   @id @default(cuid())
-  user_id             String
-  type                String
-  provider            String
-  provider_account_id String
-  refresh_token       String?
-  access_token        String?
-  token_type          String?
-  expires_at          Int?
-  scope               String?
-  id_token            String?
-  session_state       String?
-  oauth_token_secret  String?
-  oauth_token         String?
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
-  user                User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@unique([provider, provider_account_id])
-}
-
-model Profile {
-  id         String    @id @default(cuid())
-  user_id    String    @unique
-  first_name String    @default("")
-  last_name  String    @default("")
-  about_me   String?
-  birth_date DateTime?
-  gender     String?
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+enum TradeSide {
+  LONG
+  SHORT
 }
