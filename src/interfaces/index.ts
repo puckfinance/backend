@@ -1,18 +1,3 @@
-import { User } from '@prisma/client';
-import { Request, Response } from 'express';
-import HttpException from '../utils/HttpException';
-import { z } from 'zod';
-
-export interface AppRequest extends Request {
-  user?: User;
-  parseBody: <T extends z.ZodTypeAny>(schema: T) => z.infer<T>;
-}
-
-export interface AppResponse extends Response {
-  sendSuccess: (data?: Record<string, any> | null) => void;
-  sendError: (error: HttpException | number | unknown, message?: string) => void;
-}
-
 export interface CustomGoogleInterface {
   sub?: string;
   email?: string;

@@ -1,12 +1,10 @@
 import prisma from '../infrastructure/prisma';
 import passport = require('passport');
-import { AppRequest, AppResponse } from '../interfaces';
-import { AppRouter } from './AppRouter';
+import { Request, Response, Router } from 'express';
 
 class UserController {
-  public async updateProfile(req: AppRequest, res: AppResponse) {
+  public async updateProfile(req: Request, res: Response) {
     let { id } = req.params;
-    if (!id) id = req.user.id;
     const { email } = req.body;
 
     const user = await prisma.user.update({
@@ -15,16 +13,15 @@ class UserController {
         email,
       },
     });
-    res.sendSuccess(user);
+    res.json(user);
   }
 }
 
 export default () => {
   const controller = new UserController();
-  const router = new AppRouter();
-  router.router.use(passport.authenticate('jwt', { session: false }));
-  router.put('/:id', controller.updateProfile);
-  router.put('/', controller.updateProfile);
+  const router = Router();
+  router.put('/:id', passport.authenticate('jwt', { session: false }), controller.updateProfile);
+  router.put('/', passport.authenticate('jwt', { session: false }), controller.updateProfile);
 
-  return router.router;
+  return router;
 };

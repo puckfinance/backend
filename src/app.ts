@@ -1,13 +1,10 @@
 import cors = require('cors');
 import express = require('express');
-import { responseMiddleware } from './middlewares/responseMiddleware';
 import passport = require('passport');
 import morgan = require('morgan');
 import Routes from './routes';
 import { ErrorResponse } from './middlewares';
 import { Passport } from './middlewares';
-
-import { validateBodyMiddleware } from './middlewares/validateBody';
 
 export const run = async () => {
   console.info(`NODE_ENV: ${process.env.NODE_ENV}`);
@@ -26,8 +23,6 @@ export const run = async () => {
     }
   });
 
-  app.use(responseMiddleware);
-  app.use(validateBodyMiddleware);
   app.use(passport.initialize());
   app.use(morgan('dev'));
   app.options('*', cors());

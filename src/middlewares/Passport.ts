@@ -2,7 +2,6 @@ import * as bcrypt from 'bcrypt';
 import * as passport from 'passport';
 import { ExtractJwt, Strategy as JWTStrategy } from 'passport-jwt';
 import { Strategy as LocalStrategy } from 'passport-local';
-import { User } from '@prisma/client';
 import prisma from '../infrastructure/prisma';
 import { JWTPayload } from '../interfaces';
 const userNotFoundMessage = { message: 'user not found.' };
@@ -51,7 +50,7 @@ export default () => {
               id: jwtPayload.id,
             },
           });
-          return done(null, user);
+          return done(null, user as any);
           // return done(null, { id: 1, email: 'test@test.com' });
         } catch (err) {
           return done(err);
@@ -60,7 +59,7 @@ export default () => {
     ),
   );
 
-  passport.serializeUser((user: User, done) => {
+  passport.serializeUser((user: any, done) => {
     console.log('serializeUser:', user);
     done(null, user.id);
   });

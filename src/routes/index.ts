@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import AuthController from '../controllers/AuthController';
 import UserController from '../controllers/UserController';
+import BinanceController from '../controllers/BinanceController';
 
 /**
  * Http router class (post, get, put, delete, patch etc)
@@ -14,6 +15,7 @@ export default () => {
   /** Controller routes */
   routes.use('/auth', AuthController());
   routes.use('/users', UserController());
+  routes.use('/binance', BinanceController());
 
   return routes;
 };

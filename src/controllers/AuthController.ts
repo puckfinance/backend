@@ -2,14 +2,13 @@ import { User } from '@prisma/client';
 import * as passport from 'passport';
 
 import * as bcrypt from 'bcrypt';
-import { NextFunction, Request } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { PasswordSaltRound } from '../constants';
 import { emailIsValid } from '../utils/EmailValidator';
 import HttpException from '../utils/HttpException';
-import { AppRequest, AppResponse } from '../interfaces';
 import prisma from '../infrastructure/prisma';
 import { JwtService } from '../services/jwt';
-import { AppRouter } from './AppRouter';
+import { JWTPayload } from '../interfaces';
 /**
  * BindingType controller
  *
@@ -17,23 +16,26 @@ import { AppRouter } from './AppRouter';
  * @createdDate 01/04/2020
  */
 class AuthController {
-  public async signin(req: AppRequest, res: AppResponse) {
-    const user = req.user;
-
-    const payload = {
+  public async signin(req: Request, res: Response) {
+    if (!req.user) throw new Error('user empty.');
+    const user = req.user as User;
+    const payload: JWTPayload = {
       id: user.id,
       email: user.email,
     };
 
     const token = JwtService.generateToken(payload);
-    delete user.password;
-    res.sendSuccess({
+
+    res.json({
       token,
-      user: user,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
     });
   }
 
-  public async signup(req: Request, res: AppResponse) {
+  public async signup(req: Request, res: Response) {
     if (!req) throw new HttpException(400, 'email is empty.');
     if (!emailIsValid(req.body.email)) throw new HttpException(400, 'email is not valid.');
 
@@ -44,12 +46,12 @@ class AuthController {
     const newUser = await prisma.user.create({
       data: req.body,
     });
-    res.sendSuccess({
+    res.json({
       user: newUser,
     });
   }
 
-  // public async forgotPassword(req: Request, res: AppResponse) {
+  // public async forgotPassword(req: Request, res: Response) {
   //   if (!emailIsValid(req.body.email)) throw new HttpException(400, 'email is not valid.');
 
   //   const user = await AuthRepository.findUserByEmail(req.body.email);
@@ -74,7 +76,7 @@ class AuthController {
   //   });
   // }
 
-  public async changePassword(req: Request, res: AppResponse, _next: NextFunction) {
+  public async changePassword(req: Request, res: Response, _next: NextFunction) {
     const token = req.params.token;
     const payload = JwtService.verifyToken(token) as Partial<User>;
 
@@ -110,11 +112,11 @@ class AuthController {
  */
 export default () => {
   const controller = new AuthController();
-  const router = new AppRouter();
+  const router = Router();
   router.post('/signin', passport.authenticate('local', { session: false }), controller.signin);
   router.post('/signup', controller.signup);
 
   // google oauth endpoints
 
-  return router.router;
+  return router;
 };

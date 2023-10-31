@@ -15,10 +15,10 @@ dotenv.config();
  */
 class MainServer {
   /** Express application */
-  private _app: express.Application;
+  private _app: express.Application | undefined;
 
   /** Http server */
-  private server: Server;
+  private server: Server | undefined;
 
   /** Сервер чагнах port */
   private port: string | number;
@@ -52,12 +52,16 @@ class MainServer {
    * @lastModifyDate 01/04/2020
    */
   private listen(): void {
+    if (!this.server) return;
+
     this.server.listen(this.port, () => {
       console.log('*** Listening on port: %s ***', this.port);
     });
   }
 
   public unlisten(): void {
+    if (!this.server) return;
+
     this.server.close();
   }
 
@@ -68,7 +72,7 @@ class MainServer {
    * @createdDate 01/04/2020
    * @lastModifyDate 01/04/2020
    */
-  get app(): express.Application {
+  get app(): express.Application | undefined {
     return this._app;
   }
 }
