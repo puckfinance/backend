@@ -8,6 +8,7 @@ yarn.lock
 npm-debug.log
 
 # build
+built
 dist
 
 # environment configs
