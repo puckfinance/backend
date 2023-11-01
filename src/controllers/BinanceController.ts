@@ -19,9 +19,13 @@ class BinanceController {
         stoploss_price: z.string().optional(),
       });
 
-      const { symbol, side, price, risk, action, stoploss_price, takeprofit_price } = await entrySchema.parseAsync(
+      let { symbol, side, price, risk, action, stoploss_price, takeprofit_price } = await entrySchema.parseAsync(
         req.body,
       );
+
+      symbol = symbol?.split('.')?.[0];
+
+      if (!symbol) throw new Error(`Symbol error ${symbol}`);
 
       // cancel all open orders if there is no open position
       const positions = await BinanceFunctions.currentPositions(symbol);

@@ -1,17 +1,12 @@
-# Use postgres/example user/password credentials
-version: '3.1'
-
+version: '3.3'
 services:
-  db:
-    image: bitnami/postgresql
+  binancebot:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
     restart: always
-    environment:
-      POSTGRES_USER: puck
-      POSTGRES_PASSWORD: S3CReTP4SSW0RDpuck
+    env_file:
+      - .env
     ports:
-      - 5444:5432
-    volumes:
-      - postgresql:/bitnami/postgresql
-
-volumes:
-  postgresql:
+      - 80:8083
+    image: nyamkamunhjin/binance-bot-v2
