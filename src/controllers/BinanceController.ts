@@ -7,48 +7,61 @@ import { Response } from 'express';
 
 class BinanceController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
-    const schema = z.object({
-      symbol: z.string(),
-      side: z.enum(['BUY', 'SELL']),
-      entry_price: z.string(),
-      risk: z.number(),
-      details: z.object({
-        action: z.enum(['buy', 'sell', 'set_stoploss']),
-        takeprofit_price: z.string(),
-        stoploss_price: z.string(),
-      }),
-      partial_profits: z.array(
-        z.object({
-          where: z.number(),
-          qty: z.number(),
-        }),
-      ),
-    });
+    try {
+      const entrySchema = z.object({
+        symbol: z.string(),
+        side: z.enum(['BUY', 'SELL']),
+        price: z.string().optional(),
+        risk: z.number().optional(),
+        action: z.enum(['ENTRY', 'EXIT', 'MOVE_STOPLOSS']),
+        takeprofit_price: z.string().optional(),
+        stoploss_price: z.string().optional(),
+      });
 
-    const { symbol, side, entry_price, risk, details, partial_profits } = await schema.parseAsync(req.body);
+      const { symbol, side, price, risk, action, stoploss_price, takeprofit_price } = await entrySchema.parseAsync(
+        req.body,
+      );
+      switch (action) {
+        case 'ENTRY': {
+          if (!price) throw new Error('price is empty.');
 
-    switch (details.action) {
-      case 'buy':
-      case 'sell':
-        await BinanceFunctions.entry({
-          symbol,
-          side,
-          entryPrice: parseFloat(entry_price),
-          risk,
-          stoplossPrice: parseFloat(details.stoploss_price),
-          takeProfitPrice: parseFloat(details.takeprofit_price),
-          partialProfits: partial_profits,
-        });
+          if (!stoploss_price) throw new Error('stoploss_price is empty.');
+
+          if (!takeprofit_price) throw new Error('take_profit is empty.');
+
+          if (!risk) throw new Error('risk is empty.');
+
+          await BinanceFunctions.entry({
+            symbol,
+            side,
+            entryPrice: parseFloat(price),
+            risk,
+            stoplossPrice: parseFloat(stoploss_price),
+            takeProfitPrice: parseFloat(takeprofit_price),
+          });
+
+          break;
+        }
+        case 'MOVE_STOPLOSS': {
+          if (!stoploss_price) throw new Error('stoploss_price is empty.');
+
+          await BinanceFunctions.setStoploss({ symbol, side, price: parseFloat(stoploss_price) });
+
+          break;
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || '' });
     }
-
-    res.json({ success: true });
   }
 }
 
 export default () => {
   const controller = new BinanceController();
   const router = Router();
-  router.put('/entry', controller.entry);
+  router.post('/entry', controller.entry);
 
   return router;
 };

@@ -26,13 +26,12 @@ interface EntryProps {
   side: OrderSide_LT;
   stoplossPrice: number;
   takeProfitPrice: number;
-  partialProfits: {
+  partialProfits?: {
     where: number;
     qty: number;
   }[];
 }
 
-// const prisma = new PrismaClient();
 const countDecimals = (num: number) => {
   if (Math.floor(num) === num) return 0;
   return num.toString().split('.')[1].length || 0;
@@ -103,8 +102,8 @@ const entry = async ({
 
   const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
-  const setLeverage = Math.round(
-    ((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1, // use 1.1 to leave leverage room for entry
+  const setLeverage = Math.ceil(
+    (qty * currentPrice) / parseFloat(balance.availableBalance), // use 1.1 to leave leverage room for entry
   );
 
   console.log({ riskAmount, setLeverage, qty });
@@ -158,11 +157,9 @@ const entry = async ({
   };
 
   try {
-    const executedStopLossOrder = await binanceClient.futuresOrder(stopLossOrder);
+    await binanceClient.futuresOrder(stopLossOrder);
 
     console.log('STOPLOSS');
-    console.log({ executedStopLossOrder });
-    console.log('--------');
   } catch (error) {
     console.error(error);
   }
@@ -189,7 +186,8 @@ const entry = async ({
   }
 
   const previousQtys: number[] = [];
-  partialProfits.forEach(async (item) => {
+
+  partialProfits?.forEach(async (item) => {
     const price = entryPrice + ((side === 'BUY' ? takeProfitPrice : -takeProfitPrice) - entryPrice) * item.where;
 
     let qty = convertToPrecision(currentQty * item.qty, quantityPrecision);
@@ -237,16 +235,29 @@ const setStoploss = async ({ symbol, price, side }: { symbol: string; price: num
 
   const currentQty = Math.abs(parseFloat(currentPosition.positionAmt));
 
-  price = parseFloat(currentPosition.entryPrice);
-
   if (!price) throw new Error('price is undefined.');
+
+  // remove previous stop market orders
+
+  // list previous orders
+  const orders = await binanceClient.futuresOpenOrders({ symbol });
+  // cancel orders
+  const orderIdList = orders?.flatMap(({ orderId, origType }) => {
+    if (origType === 'STOP_MARKET') return orderId;
+    return [];
+  });
+
+  console.log({ orderIdList, string: JSON.stringify(orderIdList) });
+
+  if (Array.isArray(orderIdList) && orderIdList.length > 0)
+    await binanceClient.futuresCancelBatchOrders({ symbol, orderIdList: JSON.stringify(orderIdList) });
 
   const stopLossOrder: NewFuturesOrder = {
     symbol: symbol,
     stopPrice: convertToPrecision(price, tickSize) as any,
     closePosition: 'true',
     type: 'STOP_MARKET',
-    side: side,
+    side: side === 'BUY' ? 'SELL' : 'BUY',
     quantity: `${currentQty}`,
   };
 
