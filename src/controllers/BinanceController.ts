@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import BinanceFunctions from '../services/binance';
+import BinanceFunctions, { binanceClient } from '../services/binance';
 import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
+import apiKeyMiddleware from '../middlewares/apikey';
 
 class BinanceController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
@@ -21,6 +22,16 @@ class BinanceController {
       const { symbol, side, price, risk, action, stoploss_price, takeprofit_price } = await entrySchema.parseAsync(
         req.body,
       );
+
+      // cancel all open orders if there is no open position
+      const positions = await BinanceFunctions.currentPositions(symbol);
+      if (positions.length === 0) {
+        console.log('Cancelling all open orders');
+        await binanceClient.futuresCancelAllOpenOrders({
+          symbol,
+        });
+      }
+
       switch (action) {
         case 'ENTRY': {
           if (!price) throw new Error('price is empty.');
@@ -42,6 +53,7 @@ class BinanceController {
 
           break;
         }
+
         case 'MOVE_STOPLOSS': {
           if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
@@ -61,6 +73,8 @@ class BinanceController {
 export default () => {
   const controller = new BinanceController();
   const router = Router();
+  router.use(apiKeyMiddleware);
+
   router.post('/entry', controller.entry);
 
   return router;
