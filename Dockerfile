@@ -15,4 +15,4 @@ COPY --from=builder /app/built ./built
 COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 80
 
-CMD ["node", "./built/app.js"]
+CMD ["node", "./built/server.js"]

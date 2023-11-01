@@ -6,10 +6,10 @@
   "repository": {},
   "license": "MIT",
   "scripts": {
-    "start": "node ./dist/server.js",
+    "start": "node ./built/server.js",
     "stage": "dotenv -e .env -- ts-node-dev --respawn --transpile-only --exit-child ./src/server.ts",
     "dev": "dotenv -e .env.local -- ts-node-dev --respawn --transpile-only --exit-child ./src/server.ts",
-    "prod:run": "tsc  && npm prune --production && node ./dist/server.js",
+    "prod:run": "tsc  && npm prune --production && node ./built/server.js",
     "prisma:studio": "dotenv -e .env.local -- npx prisma studio",
     "prisma:seed": "dotenv -e .env.local -- npx prisma db seed",
     "prisma:migrate:dev": "dotenv -e .env.local -- prisma migrate dev",
@@ -19,7 +19,7 @@
     "prisma:generate": "dotenv -e .env.local -- prisma generate",
     "prisma:db:push": "npx prisma db push",
     "build": "tsc",
-    "clean": "rm -rf dist node_modules yarn.lock package.lock.json",
+    "clean": "rm -rf built node_modules yarn.lock package.lock.json",
     "prepare": "is-ci || husky install"
   },
   "dependencies": {
