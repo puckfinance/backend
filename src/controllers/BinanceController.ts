@@ -72,6 +72,54 @@ class BinanceController {
       res.status(500).json({ error: error?.message || '' });
     }
   }
+
+  public async balance(_req: Request, res: Response, _next: NextFunction) {
+    try {
+      const result = await BinanceFunctions.getCurrentBalance();
+
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || '' });
+    }
+  }
+
+  public async income(_req: Request, res: Response, _next: NextFunction) {
+    try {
+      const result = await BinanceFunctions.getIncome();
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || '' });
+    }
+  }
+
+  public async tradeHistory(req: Request, res: Response, _next: NextFunction) {
+    try {
+      const symbol = req.query.symbol as string;
+
+      if (!symbol) throw new Error('symbol is empty.');
+
+      const result = await BinanceFunctions.getTradeHistory(symbol, 1000);
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || '' });
+    }
+  }
+
+  public async currentPosition(req: Request, res: Response, _next: NextFunction) {
+    try {
+      const symbol = req.query.symbol as string;
+
+      if (!symbol) throw new Error('symbol is empty.');
+
+      const result = await BinanceFunctions.currentPositions(symbol);
+
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || '' });
+    }
+  }
 }
 
 export default () => {
@@ -80,6 +128,10 @@ export default () => {
   router.use(apiKeyMiddleware);
 
   router.post('/entry', controller.entry);
+  router.get('/trade-history', controller.tradeHistory);
+  router.get('/current-position', controller.currentPosition);
+  router.get('/balance', controller.balance);
+  router.get('/income', controller.income);
 
   return router;
 };

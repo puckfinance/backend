@@ -20,19 +20,9 @@ class MainServer {
   /** Http server */
   private server: Server | undefined;
 
-  /** Сервер чагнах port */
   private port: string | number;
 
-  /**
-   * Байгуулагч үйлдэл анхны тохиргоонууд, утгууд оноогдоно
-   *
-   * @author Uurtsaikh
-   * @createdDate 01/04/2020
-   * @lastModifyDate 01/04/2020
-   */
   constructor() {
-    // if(process.env.NODE_ENV !== 'production'){
-    //   registerEnv();
     // }
     this.port = process.env.PORT || SystemDefaults.PORT;
     run().then((app) => {
@@ -45,7 +35,6 @@ class MainServer {
   }
 
   /**
-   * Сервер сонсох port болон socket холболтуул хийх
    *
    * @author Uurtsaikh
    * @createdDate 01/04/2020

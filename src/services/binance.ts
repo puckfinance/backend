@@ -1,15 +1,20 @@
 import Binance, { NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
 
-import * as dotenv from 'dotenv';
 import * as moment from 'moment';
 
-dotenv.config();
-
-export const binanceClient = Binance({
+const config = {
   apiKey: process.env.BINANCE_API_KEY,
   apiSecret: process.env.BINANCE_SECRET_KEY,
   getTime: () => moment().unix() * 1000,
-});
+  ...(process.env.NODE_ENV === 'development' && {
+    httpFutures: 'https://testnet.binancefuture.com',
+    wsFutures: 'wss://stream.binancefuture.com',
+  }),
+};
+
+console.log({ config });
+
+export const binanceClient = Binance(config);
 
 interface EntryProps {
   symbol: string;
@@ -291,6 +296,15 @@ const getTradeHistory = async (symbol: string, limit: number) => {
   });
 };
 
+const getIncome = async () => {
+  const result = await binanceClient.futuresIncome({
+    incomeType: 'REALIZED_PNL',
+    limit: 1000,
+  });
+
+  return result;
+};
+
 const getOpenOrders = async () => {
   const orders = await binanceClient.futuresOpenOrders({});
   return orders;
@@ -317,6 +331,7 @@ const BinanceFunctions = {
   getCurrentBalance,
   getTradeHistory,
   getOpenOrders,
+  getIncome,
 };
 
 export default BinanceFunctions;
