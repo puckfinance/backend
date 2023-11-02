@@ -1,0 +1,25 @@
+name: SSH to Remote Server with Password
+
+on:
+  push:
+    branches:
+      - main  # Replace with your branch name
+
+jobs:
+  ssh-to-remote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v2
+
+      - name: SSH to Remote Server and Execute Command
+        uses: plutoniumby/password-ssh-action@v2
+        with:
+          host: your-remote-server
+          port: 22  # Change the port if your SSH server uses a different port
+          username: munkhjin
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            # Your commands to run on the remote server
+            ./update.sh
