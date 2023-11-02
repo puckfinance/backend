@@ -1,4 +1,4 @@
-name: Docker Build and Push
+name: Update Image and Redeploy container
 
 on:
   push:
@@ -30,3 +30,16 @@ jobs:
           docker push nyamkamunhjin/binance-bot-v2:latest
         working-directory: ./
 
+  update-container:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+    - name: run update script
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: trade.munkhjin.online
+        username: munkhjin
+        password: ${{ secrets.SSH_PASSWORD }}
+        port: 22
+        script: | 
+          ./update.sh
