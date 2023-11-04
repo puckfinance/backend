@@ -99,9 +99,12 @@ const entry = async ({
 
   const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
-  const setLeverage = Math.ceil(
+  let setLeverage = Math.ceil(
     (qty * currentPrice) / parseFloat(balance.availableBalance), // use 1.1 to leave leverage room for entry
   );
+
+  // leverage cannot be 0 so update to 1
+  setLeverage = setLeverage === 0 ? 1 : setLeverage;
 
   console.log({ riskAmount, setLeverage, qty });
 
