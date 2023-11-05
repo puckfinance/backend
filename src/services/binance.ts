@@ -16,19 +16,6 @@ console.log({ config });
 
 export const binanceClient = Binance(config);
 
-interface EntryProps {
-  symbol: string;
-  risk: number;
-  entryPrice: number;
-  side: OrderSide_LT;
-  stoplossPrice: number;
-  takeProfitPrice: number;
-  partialProfits?: {
-    where: number;
-    qty: number;
-  }[];
-}
-
 const countDecimals = (num: number) => {
   if (Math.floor(num) === num) return 0;
   return num.toString().split('.')[1].length || 0;
@@ -49,11 +36,26 @@ const currentPositions = async (symbol: string) => {
   return positions;
 };
 
+interface EntryProps {
+  symbol: string;
+  risk: number;
+  risk_amount: number;
+  entryPrice: number;
+  side: OrderSide_LT;
+  stoplossPrice: number;
+  takeProfitPrice: number;
+  partialProfits?: {
+    where: number;
+    qty: number;
+  }[];
+}
+
 const entry = async ({
   symbol,
   entryPrice,
   partialProfits,
   risk,
+  risk_amount,
   side,
   stoplossPrice,
   takeProfitPrice,
@@ -95,13 +97,11 @@ const entry = async ({
 
   const currentPrice = parseFloat(trade[0].price);
 
-  const riskAmount = parseFloat(balance.balance) * (risk / 100);
+  const riskAmount = risk_amount || parseFloat(balance.balance) * (risk / 100);
 
   const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
-  let setLeverage = Math.ceil(
-    (qty * currentPrice) / parseFloat(balance.availableBalance), // use 1.1 to leave leverage room for entry
-  );
+  let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
 
   // leverage cannot be 0 so update to 1
   setLeverage = setLeverage === 0 ? 1 : setLeverage;
@@ -130,18 +130,14 @@ const entry = async ({
 
   // entry
   let origQty: number = 0;
-  try {
-    const executedEntryOrder = await binanceClient.futuresOrder(entryOrder);
+  const executedEntryOrder = await binanceClient.futuresOrder(entryOrder);
 
-    console.log(`ENTRY ${executedEntryOrder.symbol}, ${executedEntryOrder.avgPrice}`);
+  console.log(`ENTRY`);
+  console.log({ executedEntryOrder });
 
-    origQty = parseFloat(executedEntryOrder.origQty);
-  } catch (error) {
-    console.error(error);
-  }
+  origQty = parseFloat(executedEntryOrder.origQty);
 
   // stoploss
-
   let price = stoplossPrice;
 
   const currentQty = Math.abs(origQty);
@@ -156,10 +152,13 @@ const entry = async ({
     workingType: 'CONTRACT_PRICE',
   };
 
-  try {
-    await binanceClient.futuresOrder(stopLossOrder);
+  let executedStoplossOrder;
 
-    console.log('STOPLOSS');
+  try {
+    executedStoplossOrder = await binanceClient.futuresOrder(stopLossOrder);
+
+    console.log(`STOPLOSS`);
+    console.log({ executedStoplossOrder });
   } catch (error) {
     console.error(error);
   }
@@ -178,8 +177,11 @@ const entry = async ({
     quantity: `${currentQty}`,
   };
 
+  let executedTakeProfitOrder;
+
   try {
-    const executedTakeProfitOrder = await binanceClient.futuresOrder(takeProfitOrder);
+    executedTakeProfitOrder = await binanceClient.futuresOrder(takeProfitOrder);
+    console.log(`TAKEPROFIT`);
     console.log({ executedTakeProfitOrder });
   } catch (error) {
     console.error(error);
@@ -210,13 +212,21 @@ const entry = async ({
     try {
       const executedTakeProfitOrder = await binanceClient.futuresOrder(takeProfitOrder as any);
 
-      console.log('TAKEPROFIT');
+      console.log(`TAKEPROFIT ${item.where} - ${item.qty}`);
       console.log({ executedTakeProfitOrder });
       console.log('--------');
     } catch (error) {
       console.error(error);
     }
   });
+
+  return {
+    success: true,
+    entry: price,
+    stoploss: executedStoplossOrder?.stopPrice,
+    takeprofit: executedTakeProfitOrder?.stopPrice,
+    qty: executedEntryOrder.origQty,
+  };
 };
 
 const setStoploss = async ({ symbol, price, side }: { symbol: string; price: number; side: OrderSide_LT }) => {

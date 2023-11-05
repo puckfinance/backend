@@ -13,15 +13,15 @@ class BinanceController {
         symbol: z.string(),
         side: z.enum(['BUY', 'SELL']),
         price: z.string().optional(),
-        risk: z.number().optional(),
+        risk: z.any().optional(),
+        risk_amount: z.any().optional(),
         action: z.enum(['ENTRY', 'EXIT', 'MOVE_STOPLOSS']),
         takeprofit_price: z.string().optional(),
         stoploss_price: z.string().optional(),
       });
 
-      let { symbol, side, price, risk, action, stoploss_price, takeprofit_price } = await entrySchema.parseAsync(
-        req.body,
-      );
+      let { symbol, side, price, risk, risk_amount, action, stoploss_price, takeprofit_price } =
+        await entrySchema.parseAsync(req.body);
 
       symbol = symbol?.split('.')?.[0];
 
@@ -44,31 +44,32 @@ class BinanceController {
 
           if (!takeprofit_price) throw new Error('take_profit is empty.');
 
-          if (!risk) throw new Error('risk is empty.');
+          if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
-          await BinanceFunctions.entry({
+          const result = await BinanceFunctions.entry({
             symbol,
             side,
             entryPrice: parseFloat(price),
-            risk,
+            risk: parseFloat(risk),
+            risk_amount: parseFloat(risk_amount),
             stoplossPrice: parseFloat(stoploss_price),
             takeProfitPrice: parseFloat(takeprofit_price),
           });
 
-          break;
+          return res.status(200).json(result);
         }
-
         case 'MOVE_STOPLOSS': {
           if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
-          await BinanceFunctions.setStoploss({ symbol, side, price: parseFloat(stoploss_price) });
+          const result = await BinanceFunctions.setStoploss({ symbol, side, price: parseFloat(stoploss_price) });
 
-          break;
+          return res.status(200).json(result);
         }
       }
 
       res.json({ success: true });
     } catch (error: any) {
+      console.log({ error: error?.message });
       res.status(500).json({ error: error?.message || '' });
     }
   }
