@@ -135,6 +135,19 @@ class BinanceController {
       res.status(500).json({ error: error?.message || '' });
     }
   }
+
+  public async getSnapshots(req: Request, res: Response, _next: NextFunction) {
+    try {
+      const startTime = parseFloat(req.query.startTime as string);
+      const endTime = parseFloat(req.query.endTime as string);
+
+      const result = await BinanceFunctions.getSnapshot({ startTime, endTime });
+
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || '' });
+    }
+  }
 }
 
 export default () => {
@@ -148,6 +161,7 @@ export default () => {
   router.get('/open-orders', controller.openOrders);
   router.get('/balance', controller.balance);
   router.get('/income', controller.income);
+  router.get('/snapshot', controller.getSnapshots);
 
   return router;
 };

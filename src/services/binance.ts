@@ -334,6 +334,16 @@ const getPnl = async () => {
   return orders;
 };
 
+const getSnapshot = async ({ startTime = moment().subtract(1, 'month').unix() * 1000, endTime = moment().unix() * 1000 }: { startTime: number; endTime: number }) => {
+  const snapshots = await binanceClient.accountSnapshot({
+    type: 'FUTURES',
+    startTime,
+    endTime,
+    limit: 1000,
+  });
+  return snapshots;
+};
+
 const BinanceFunctions = {
   checkConnection,
   currentPositions,
@@ -345,6 +355,7 @@ const BinanceFunctions = {
   getTradeHistory,
   getOpenOrders,
   getIncome,
+  getSnapshot,
 };
 
 export default BinanceFunctions;
