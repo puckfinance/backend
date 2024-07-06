@@ -1,6 +1,7 @@
 import Binance, { NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
 
 import * as moment from 'moment';
+import { cache } from '../app';
 
 const config = {
   apiKey: process.env.BINANCE_API_KEY,
@@ -334,13 +335,28 @@ const getPnl = async () => {
   return orders;
 };
 
-const getSnapshot = async ({ startTime = moment().subtract(1, 'month').unix() * 1000, endTime = moment().unix() * 1000 }: { startTime: number; endTime: number }) => {
+const getSnapshot = async ({
+  startTime = moment().subtract(1, 'month').unix() * 1000,
+  endTime = moment().unix() * 1000,
+}: {
+  startTime: number;
+  endTime: number;
+}) => {
+  const cacheKey = ['snapshot', startTime, endTime].join('-');
+
+  const cacheData = cache.get(cacheKey);
+
+  if (cacheData) return cacheData;
+
   const snapshots = await binanceClient.accountSnapshot({
     type: 'FUTURES',
     startTime,
     endTime,
-    limit: 1000,
+    limit: 30,
   });
+
+  cache.set(cacheKey, snapshots, 60 * 60 * 24);
+
   return snapshots;
 };
 

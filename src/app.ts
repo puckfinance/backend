@@ -5,11 +5,15 @@ import morgan = require('morgan');
 import Routes from './routes';
 import { ErrorResponse } from './middlewares';
 import { Passport } from './middlewares';
+import * as NodeCache from 'node-cache'
+
+export const cache = new NodeCache();
 
 export const run = async () => {
   console.info(`NODE_ENV: ${process.env.NODE_ENV}`);
   Passport();
   const app = express();
+
 
   app.set('trust proxy', 1);
   app.use(cors());
