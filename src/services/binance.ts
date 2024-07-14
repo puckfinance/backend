@@ -171,11 +171,11 @@ const entry = async ({
 
   const takeProfitOrder: NewFuturesOrder = {
     symbol: symbol,
-    stopPrice: convertToPrecision(price, tickSize) as any,
-    closePosition: 'true',
-    type: 'TAKE_PROFIT_MARKET',
+    price: convertToPrecision(price, tickSize) as any,
+    type: 'LIMIT',
     side: side === 'BUY' ? 'SELL' : 'BUY',
     quantity: `${currentQty}`,
+    timeInForce: 'GTC'
   };
 
   let executedTakeProfitOrder;
