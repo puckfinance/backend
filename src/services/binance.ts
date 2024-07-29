@@ -98,7 +98,7 @@ const entry = async ({
 
   const currentPrice = parseFloat(trade[0].price);
 
-  const riskAmount = risk_amount || parseFloat(balance.balance) * (risk / 100);
+  const riskAmount = Math.ceil(risk_amount || parseFloat(balance.balance) * (risk / 100));
 
   const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
