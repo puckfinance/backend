@@ -100,7 +100,7 @@ const entry = async ({
 
   const riskAmount = Math.ceil(risk_amount || parseFloat(balance.balance) * (risk / 100));
 
-  const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
+  const qty = convertToPrecision(Math.ceil(riskAmount / Math.abs(entryPrice - stoplossPrice)), quantityPrecision);
 
   let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
 
