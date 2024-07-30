@@ -202,7 +202,7 @@ const entry = async ({
       previousQtys.push(qty);
     }
 
-    const takeProfitOrder = {
+    const takeProfitLimitOrder = {
       symbol: symbol,
       price: convertToPrecision(price, tickSize) as any,
       type: 'LIMIT',
@@ -211,7 +211,7 @@ const entry = async ({
     };
 
     try {
-      const executedTakeProfitOrder = await binanceClient.futuresOrder(takeProfitOrder as any);
+      const executedTakeProfitOrder = await binanceClient.futuresOrder(takeProfitLimitOrder as any);
 
       console.log(`TAKEPROFIT ${item.where} - ${item.qty}`);
       console.log({ executedTakeProfitOrder });
@@ -219,6 +219,7 @@ const entry = async ({
     } catch (error) {
       console.error(error);
     }
+
   });
 
   return {

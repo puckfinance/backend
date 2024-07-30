@@ -65,6 +65,18 @@ class BinanceController {
 
           return res.status(200).json(result);
         }
+
+        case 'EXIT': {
+
+          if (positions.length === 0) {
+            console.log('Cancelling all open orders');
+            await binanceClient.futuresCancelAllOpenOrders({
+              symbol,
+            });
+          }
+
+          return res.status(200).json({result: 'Cancelling all open orders'});
+        }
       }
 
       res.json({ success: true });
