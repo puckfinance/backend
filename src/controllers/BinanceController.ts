@@ -5,6 +5,7 @@ import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
+import { NewFuturesOrder } from 'binance-api-node';
 
 class BinanceController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
@@ -73,6 +74,14 @@ class BinanceController {
             await binanceClient.futuresCancelAllOpenOrders({
               symbol,
             });
+          } else {
+            const closeOrder: NewFuturesOrder = {
+              symbol: symbol,
+              type: 'MARKET',
+              side: side === 'BUY' ? 'SELL' : 'BUY',
+              quantity: `${positions[0].positionAmt}`,
+            };
+            await binanceClient.futuresOrder(closeOrder)
           }
 
           return res.status(200).json({result: 'Cancelling all open orders'});

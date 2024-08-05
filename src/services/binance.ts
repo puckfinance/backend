@@ -162,6 +162,14 @@ const entry = async ({
     console.log({ executedStoplossOrder });
   } catch (error) {
     console.error(error);
+    // close position without stoploss
+    const closeOrder: NewFuturesOrder = {
+      symbol: symbol,
+      type: 'MARKET',
+      side: side === 'BUY' ? 'SELL' : 'BUY',
+      quantity: `${qty}`,
+    };
+    await binanceClient.futuresOrder(closeOrder)
   }
 
   // takeprofit
