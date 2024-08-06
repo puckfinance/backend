@@ -169,7 +169,7 @@ const entry = async ({
       side: side === 'BUY' ? 'SELL' : 'BUY',
       quantity: `${qty}`,
     };
-    await binanceClient.futuresOrder(closeOrder)
+    await binanceClient.futuresOrder(closeOrder);
   }
 
   // takeprofit
@@ -179,12 +179,21 @@ const entry = async ({
 
   const takeProfitOrder: NewFuturesOrder = {
     symbol: symbol,
-    stopPrice: convertToPrecision(price, tickSize) as any,
-    closePosition: 'true',
-    type: 'TAKE_PROFIT_MARKET',
+    price: convertToPrecision(price, tickSize) as any,
+    type: 'LIMIT',
     side: side === 'BUY' ? 'SELL' : 'BUY',
     quantity: `${currentQty}`,
+    timeInForce: 'GTC',
   };
+
+  // const takeProfitOrder: NewFuturesOrder = {
+  //   symbol: symbol,
+  //   stopPrice: convertToPrecision(price, tickSize) as any,
+  //   closePosition: 'true',
+  //   type: 'TAKE_PROFIT_MARKET',
+  //   side: side === 'BUY' ? 'SELL' : 'BUY',
+  //   quantity: `${currentQty}`,
+  // };
 
   let executedTakeProfitOrder;
 
@@ -227,7 +236,6 @@ const entry = async ({
     } catch (error) {
       console.error(error);
     }
-
   });
 
   return {
