@@ -17,12 +17,12 @@ console.log({ config });
 
 export const binanceClient = Binance(config);
 
-const countDecimals = (num: number) => {
+export const countDecimals = (num: number) => {
   if (Math.floor(num) === num) return 0;
   return num.toString().split('.')[1].length || 0;
 };
 
-const convertToPrecision = (num: number, precision: number) => {
+export const convertToPrecision = (num: number, precision: number) => {
   return Math.trunc(num * Math.pow(10, precision)) / Math.pow(10, precision);
 };
 
