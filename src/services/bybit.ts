@@ -1,5 +1,6 @@
 import { RestClientV5 } from 'bybit-api';
 import { convertToPrecision, countDecimals } from './binance';
+import Log from './log';
 
 const API_KEY = process.env.BYBIT_API_KEY;
 const API_SECRET = process.env.BYBIT_SECRET_KEY;
@@ -65,7 +66,6 @@ const entry = async ({
     symbol,
   });
 
-
   const quantityPrecision = countDecimals(parseFloat(info.result.list[0].lotSizeFilter.qtyStep));
 
   if (!balance) throw new Error('balance is undefined.');
@@ -96,8 +96,9 @@ const entry = async ({
     takeProfit: takeProfitPrice.toString(),
   });
 
-  console.log('ENTRY')
+  console.log('ENTRY');
   console.dir(executedEntryOrder, { depth: null });
+  Log.sendLog({ executedEntryOrder, riskAmount, qty });
 
   return {
     success: true,
@@ -128,16 +129,19 @@ const setStoploss = async ({ symbol, price }: { symbol: string; price: number })
 
     console.log('MOVE STOPLOSS');
     console.log({ executedStopLossOrder });
+    Log.sendLog({ executedStopLossOrder });
+
     console.log('--------');
   } catch (error) {
     console.error(error);
+    Log.sendLog({ error });
+
   }
 };
 
-
 const BybitFunctions = {
   entry,
-  setStoploss
+  setStoploss,
 };
 
 export default BybitFunctions;

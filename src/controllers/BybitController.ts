@@ -5,6 +5,7 @@ import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
+import Log from '../services/log';
 
 class BybitController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
@@ -55,8 +56,6 @@ class BybitController {
 
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
-          
-
           const result = await BybitFunctions.entry({
             symbol,
             side: bybitSides[side],
@@ -76,12 +75,13 @@ class BybitController {
 
           return res.status(200).json(result);
         }
-
       }
 
       res.json({ success: true });
     } catch (error: any) {
       console.log({ error: error?.message });
+      Log.sendLog({ error });
+
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -95,8 +95,6 @@ class BybitController {
       res.status(500).json({ error: error?.message || '' });
     }
   }
-
-
 }
 
 export default () => {
