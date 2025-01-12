@@ -1,17 +1,15 @@
 import cors = require('cors');
 import express = require('express');
-import passport = require('passport');
 import morgan = require('morgan');
 import Routes from './routes';
 import { ErrorResponse } from './middlewares';
-import { Passport } from './middlewares';
 import * as NodeCache from 'node-cache'
 
 export const cache = new NodeCache();
 
 export const run = async () => {
   console.info(`NODE_ENV: ${process.env.NODE_ENV}`);
-  Passport();
+  // Passport();
   const app = express();
 
 
@@ -27,7 +25,7 @@ export const run = async () => {
     }
   });
 
-  app.use(passport.initialize());
+  // app.use(passport.initialize());npm
   app.use(morgan('dev'));
   app.options('*', cors());
   app.get('/', (_req, res) => {
