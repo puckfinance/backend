@@ -37,7 +37,7 @@ jobs:
     - name: run update script
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: trade.munkhjin.online
+        host: trade.munkhjin.fun
         username: munkhjin
         password: ${{ secrets.SSH_PASSWORD }}
         port: 22
