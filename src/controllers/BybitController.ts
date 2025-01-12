@@ -88,9 +88,11 @@ class BybitController {
 
   public async balance(_req: Request, res: Response, _next: NextFunction) {
     try {
-      const result = await bybitClient.getAccountInfo();
+       const balances = await bybitClient.getWalletBalance({
+        accountType: 'UNIFIED',
+      });
 
-      res.status(200).json(result);
+      res.status(200).json(balances);
     } catch (error: any) {
       res.status(500).json({ error: error?.message || '' });
     }
