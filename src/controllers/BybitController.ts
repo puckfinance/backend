@@ -106,7 +106,7 @@ export default () => {
   // router.get('/trade-history', controller.tradeHistory);
   // router.get('/current-position', controller.currentPosition);
   // router.get('/open-orders', controller.openOrders);
-  // router.get('/balance', controller.balance);
+  router.get('/balance', controller.balance);
   // router.get('/income', controller.income);
   // router.get('/snapshot', controller.getSnapshots);
 
