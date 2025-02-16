@@ -61,65 +61,12 @@ const entry = async ({
   stoplossPrice,
   takeProfitPrice,
 }: EntryProps) => {
-  /* no entry on current position */
-  const positions = await currentPositions(symbol);
-
-  if (positions.length > 0) {
-    console.log('Cancelled opening position');
-    throw new Error('Currently in a trade.');
-  }
-
-  const balances = await binanceClient.futuresAccountBalance();
-
-  const balance = balances.find((item) => item.asset === process.env.CURRENCY);
-
-  /* get precisions */
-  const info = await binanceClient.futuresExchangeInfo();
-
-  const symbolInfo = info.symbols.find((item) => item.symbol === symbol);
-
-  const { quantityPrecision } = symbolInfo as unknown as Symbol & {
-    pricePrecision: number;
-    quantityPrecision: number;
-  };
-
-  if (!symbolInfo) throw new Error('symbol info is undefined');
-
-  const priceFilter = symbolInfo.filters.find((item) => item.filterType === 'PRICE_FILTER');
-
-  const tickSize = countDecimals(parseFloat((priceFilter as any).tickSize as string));
-
-  if (!balance) throw new Error('balance is undefined.');
-
-  const trade = await binanceClient.futuresTrades({
-    symbol: symbol,
-    limit: 1,
-  });
-
-  const currentPrice = parseFloat(trade[0].price);
-
-  const riskAmount = Math.ceil(risk_amount || parseFloat(balance.balance) * (risk / 100));
-
-  const qty = convertToPrecision(Math.ceil(riskAmount / Math.abs(entryPrice - stoplossPrice)), quantityPrecision);
-
-  let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
-
-  // leverage cannot be 0 so update to 1
-  setLeverage = setLeverage === 0 ? 1 : setLeverage;
-
-  console.log({ riskAmount, setLeverage, qty });
-
-  const leverage = await binanceClient.futuresLeverage({
-    symbol: symbol,
-    leverage: setLeverage,
-  });
-
-  console.log({
-    qty,
-    balance: balance.balance,
-    leverage: leverage.leverage,
-    price: currentPrice,
-    quantityPrecision,
+  const { qty, tickSize, quantityPrecision } = await getTradeEntryInformation({
+    symbol,
+    risk,
+    risk_amount,
+    entryPrice,
+    stoplossPrice,
   });
 
   const entryOrder: NewFuturesOrder = {
@@ -244,6 +191,75 @@ const entry = async ({
     stoploss: executedStoplossOrder?.stopPrice,
     takeprofit: executedTakeProfitOrder?.stopPrice,
     qty: executedEntryOrder.origQty,
+  };
+};
+
+const entryLimit = async ({
+  symbol,
+  entryPrice,
+  risk,
+  risk_amount,
+  side,
+  stoplossPrice,
+  takeProfitPrice,
+}: EntryProps) => {
+  const { qty, tickSize } = await getTradeEntryInformation({
+    symbol,
+    risk,
+    risk_amount,
+    entryPrice,
+    stoplossPrice,
+  });
+
+  const entryOrder: NewFuturesOrder = {
+    symbol: symbol,
+    type: 'LIMIT',
+    side,
+    quantity: `${qty}`,
+    timeInForce: 'GTC',
+    price: `${convertToPrecision(entryPrice, tickSize)}`,
+  };
+
+  // entry
+  let origQty: number = 0;
+
+  console.log(`ENTRY`);
+
+  // stoploss
+  let price = stoplossPrice;
+
+  const currentQty = Math.abs(origQty);
+
+  const stopLossOrder: NewFuturesOrder = {
+    symbol: symbol,
+    stopPrice: convertToPrecision(price, tickSize) as any,
+    closePosition: 'true',
+    type: 'STOP_MARKET',
+    side: side === 'BUY' ? 'SELL' : 'BUY',
+    quantity: `${currentQty}`,
+    workingType: 'CONTRACT_PRICE',
+  };
+
+  // set take_profit order
+  price = takeProfitPrice;
+
+  const takeProfitOrder: NewFuturesOrder = {
+    symbol: symbol,
+    stopPrice: convertToPrecision(price, tickSize) as any,
+    closePosition: 'true',
+    type: 'TAKE_PROFIT_MARKET',
+    side: side === 'BUY' ? 'SELL' : 'BUY',
+    quantity: `${currentQty}`,
+  };
+
+  const executedOrders = await binanceClient.futuresBatchOrders({
+    batchOrders: [entryOrder, stopLossOrder, takeProfitOrder],
+  });
+
+  return {
+    success: true,
+    executedOrders,
+    qty: executedOrders[0].origQty,
   };
 };
 
@@ -377,10 +393,87 @@ const getSnapshot = async ({
   return snapshots;
 };
 
+const getTradeEntryInformation = async ({
+  symbol,
+  risk_amount,
+  risk,
+  entryPrice,
+  stoplossPrice,
+}: Pick<EntryProps, 'symbol' | 'risk' | 'risk_amount' | 'entryPrice' | 'stoplossPrice'>): Promise<{
+  qty: number;
+  tickSize: number;
+  quantityPrecision: number;
+}> => {
+  /* no entry on current position */
+
+  const positions = await currentPositions(symbol);
+
+  if (positions.length > 0) {
+    console.log('Cancelled opening position');
+    throw new Error('Currently in a trade.');
+  }
+
+  const balances = await binanceClient.futuresAccountBalance();
+
+  const balance = balances.find((item) => item.asset === process.env.CURRENCY);
+
+  /* get precisions */
+  const info = await binanceClient.futuresExchangeInfo();
+
+  const symbolInfo = info.symbols.find((item) => item.symbol === symbol);
+
+  const { quantityPrecision } = symbolInfo as unknown as Symbol & {
+    pricePrecision: number;
+    quantityPrecision: number;
+  };
+
+  if (!symbolInfo) throw new Error('symbol info is undefined');
+
+  const priceFilter = symbolInfo.filters.find((item) => item.filterType === 'PRICE_FILTER');
+
+  const tickSize = countDecimals(parseFloat((priceFilter as any).tickSize as string));
+
+  if (!balance) throw new Error('balance is undefined.');
+
+  const trade = await binanceClient.futuresTrades({
+    symbol: symbol,
+    limit: 1,
+  });
+
+  const currentPrice = parseFloat(trade[0].price);
+
+  const riskAmount = Math.ceil(risk_amount || parseFloat(balance.balance) * (risk / 100));
+
+  const qty = convertToPrecision(Math.ceil(riskAmount / Math.abs(entryPrice - stoplossPrice)), quantityPrecision);
+
+  let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
+
+  // leverage cannot be 0 so update to 1
+  setLeverage = setLeverage === 0 ? 1 : setLeverage;
+
+  console.log({ riskAmount, setLeverage, qty });
+
+  const leverage = await binanceClient.futuresLeverage({
+    symbol: symbol,
+    leverage: setLeverage,
+  });
+
+  console.log({
+    qty,
+    balance: balance.balance,
+    leverage: leverage.leverage,
+    price: currentPrice,
+    quantityPrecision,
+  });
+
+  return { qty, tickSize, quantityPrecision };
+};
+
 const BinanceFunctions = {
   checkConnection,
   currentPositions,
   entry,
+  entryLimit,
   getPnl,
   getPosition,
   setStoploss,

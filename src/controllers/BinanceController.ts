@@ -16,7 +16,7 @@ class BinanceController {
         price: z.string().optional(),
         risk: z.any().optional(),
         risk_amount: z.any().optional(),
-        action: z.enum(['ENTRY', 'EXIT', 'MOVE_STOPLOSS']),
+        action: z.enum(['ENTRY', 'ENTRY_LIMIT', 'EXIT', 'MOVE_STOPLOSS']),
         takeprofit_price: z.string().optional(),
         stoploss_price: z.string().optional(),
       });
@@ -48,6 +48,27 @@ class BinanceController {
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
           const result = await BinanceFunctions.entry({
+            symbol,
+            side,
+            entryPrice: parseFloat(price),
+            risk: parseFloat(risk),
+            risk_amount: parseFloat(risk_amount),
+            stoplossPrice: parseFloat(stoploss_price),
+            takeProfitPrice: parseFloat(takeprofit_price),
+          });
+
+          return res.status(200).json(result);
+        }
+        case 'ENTRY_LIMIT': {
+          if (!price) throw new Error('price is empty.');
+
+          if (!stoploss_price) throw new Error('stoploss_price is empty.');
+
+          if (!takeprofit_price) throw new Error('take_profit is empty.');
+
+          if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
+
+          const result = await BinanceFunctions.entryLimit({
             symbol,
             side,
             entryPrice: parseFloat(price),
