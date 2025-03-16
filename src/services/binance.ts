@@ -442,9 +442,9 @@ const getTradeEntryInformation = async ({
 
   const currentPrice = parseFloat(trade[0].price);
 
-  const riskAmount = Math.ceil(risk_amount || parseFloat(balance.balance) * (risk / 100));
+  const riskAmount = (risk_amount || parseFloat(balance.balance) * (risk / 100));
 
-  const qty = convertToPrecision(Math.ceil(riskAmount / Math.abs(entryPrice - stoplossPrice)), quantityPrecision);
+  const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
   let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
 

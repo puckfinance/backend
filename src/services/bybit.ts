@@ -77,7 +77,7 @@ const entry = async ({
 
   const currentPrice = parseFloat(ticker.result.list[0].markPrice);
 
-  const riskAmount = Math.ceil(risk_amount || parseFloat(balance.walletBalance) * (risk / 100));
+  const riskAmount = risk_amount || parseFloat(balance.walletBalance) * (risk / 100);
 
   console.log({ riskAmount, currentPrice, stoplossPrice });
 
