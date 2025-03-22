@@ -6,6 +6,7 @@ import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
 import { NewFuturesOrder } from 'binance-api-node';
+import { getClient as getRedisClient, isConnected as isRedisConnected } from '../infrastructure/redis';
 
 class BinanceController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
@@ -184,14 +185,53 @@ class BinanceController {
 
   public async getSnapshots(req: Request, res: Response, _next: NextFunction) {
     try {
-      const startTime = parseFloat(req.query.startTime as string);
-      const endTime = parseFloat(req.query.endTime as string);
+      const snapshotSchema = z.object({
+        startTime: z.string().optional(),
+        endTime: z.string().optional(),
+      });
 
-      const result = await BinanceFunctions.getSnapshot({ startTime, endTime });
+      const cacheKey = `snapshots_${req.query.startTime || ''}_${req.query.endTime || ''}`;
+      
+      // Try to get data from Redis first if connected
+      if (isRedisConnected) {
+        try {
+          const redisClient = getRedisClient();
+          const cachedData = await redisClient.get(cacheKey);
+          if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+          }
+        } catch (redisErr) {
+          console.error('Redis error in snapshots:', redisErr);
+          // Continue with normal flow if Redis fails
+        }
+      }
+      
+      const { startTime, endTime } = await snapshotSchema.parseAsync(req.query);
 
-      res.status(200).json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error?.message || '' });
+      const response = await BinanceFunctions.getSnapshot({
+        startTime: startTime ? parseInt(startTime) : Math.floor(Date.now() - 30 * 24 * 60 * 60 * 1000), // Default to 30 days ago
+        endTime: endTime ? parseInt(endTime) : Math.floor(Date.now()), // Default to now
+      });
+      
+      // Cache in Redis if connected
+      if (isRedisConnected) {
+        try {
+          const redisClient = getRedisClient();
+          await redisClient.set(cacheKey, JSON.stringify(response), {
+            EX: 60 * 5 // 5 minutes cache
+          });
+        } catch (redisErr) {
+          console.error('Failed to cache snapshots in Redis:', redisErr);
+        }
+      }
+
+      return res.json(response);
+    } catch (error) {
+      console.error('Error getting snapshots:', error);
+      return res.status(500).json({ 
+        error: 'Failed to fetch snapshots', 
+        message: error instanceof Error ? error.message : String(error) 
+      });
     }
   }
 }

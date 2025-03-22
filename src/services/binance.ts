@@ -2,6 +2,7 @@ import Binance, { NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
 
 import * as moment from 'moment';
 import { cache } from '../app';
+import { getClient as getRedisClient, isConnected as isRedisConnected } from '../infrastructure/redis';
 
 const config = {
   apiKey: process.env.BINANCE_API_KEY,
@@ -375,22 +376,58 @@ const getSnapshot = async ({
   startTime: number;
   endTime: number;
 }) => {
-  const cacheKey = ['snapshot', startTime, endTime].join('-');
+  try {
+    const cacheKey = `binance_snapshots_${startTime}_${endTime}`;
+    
+    // Try to get data from Redis first if connected
+    if (isRedisConnected) {
+      try {
+        const redisClient = getRedisClient();
+        const cachedData = await redisClient.get(cacheKey);
+        if (cachedData) {
+          return JSON.parse(cachedData);
+        }
+      } catch (redisErr) {
+        console.error('Redis error:', redisErr);
+        // Fall back to NodeCache if Redis fails
+      }
+    }
+    
+    // Try NodeCache as fallback
+    const cacheData = cache.get(cacheKey);
+    if (cacheData) {
+      return cacheData;
+    }
 
-  const cacheData = cache.get(cacheKey);
-
-  if (cacheData) return cacheData;
-
-  const snapshots = await binanceClient.accountSnapshot({
-    type: 'FUTURES',
-    startTime,
-    endTime,
-    limit: 30,
-  });
-
-  cache.set(cacheKey, snapshots, 60 * 60 * 24);
-
-  return snapshots;
+    // If no cached data found, fetch from API
+    const snapshots = await binanceClient.accountSnapshot({
+      type: 'FUTURES',
+      startTime,
+      endTime,
+      limit: 30,
+    });
+    
+    // Cache in Redis if connected
+    if (isRedisConnected) {
+      try {
+        const redisClient = getRedisClient();
+        await redisClient.set(cacheKey, JSON.stringify(snapshots), {
+          EX: 60 * 60 * 24 // 24 hours
+        });
+      } catch (redisErr) {
+        console.error('Failed to cache in Redis:', redisErr);
+        // Fall back to NodeCache if Redis fails
+      }
+    }
+    
+    // Also cache in NodeCache as backup
+    cache.set(cacheKey, snapshots, 60 * 60 * 24);
+    
+    return snapshots;
+  } catch (error) {
+    console.error('Error getting snapshot:', error);
+    throw error;
+  }
 };
 
 const getTradeEntryInformation = async ({
@@ -442,10 +479,13 @@ const getTradeEntryInformation = async ({
 
   const currentPrice = parseFloat(trade[0].price);
 
-  const riskAmount = (risk_amount || parseFloat(balance.balance) * (risk / 100));
+  // Calculate risk amount without ceiling to avoid over-risking
+  const riskAmount = risk_amount || parseFloat(balance.balance) * (risk / 100);
 
+  // Calculate quantity and round down to ensure we don't over-risk
   const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
+  // Calculate required leverage and round up to ensure enough leverage
   let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
 
   // leverage cannot be 0 so update to 1
