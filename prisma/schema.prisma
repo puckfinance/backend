@@ -17,6 +17,8 @@ model User {
   email     String     @unique
   password  String
   TradeLog  TradeLog[]
+
+  TradeAccount TradeAccount[]
 }
 
 model TradeLog {
@@ -34,6 +36,16 @@ model TradeLog {
   screenshotUrl   String?
   user            User      @relation(fields: [userId], references: [id])
   userId          String
+}
+
+model TradeAccount {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  apiKey    String 
+  secretKey String
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
 }
 
 enum TradeSide {

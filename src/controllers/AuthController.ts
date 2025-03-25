@@ -4,18 +4,19 @@ import * as passport from 'passport';
 import * as bcrypt from 'bcrypt';
 import { NextFunction, Request, Response, Router } from 'express';
 import { PasswordSaltRound } from '../constants';
-import { emailIsValid } from '../utils/EmailValidator';
 import HttpException from '../utils/HttpException';
 import prisma from '../infrastructure/prisma';
 import { JwtService } from '../services/jwt';
 import { JWTPayload } from '../interfaces';
+import * as jwt from 'jsonwebtoken';
+import { UserLoginDTO, UserSignupDTO } from '../interfaces/User';
 /**
  * BindingType controller
  *
  * @author Munkhjin
  * @createdDate 01/04/2020
  */
-class AuthController {
+export class AuthController {
   public async signin(req: Request, res: Response) {
     if (!req.user) throw new Error('user empty.');
     const user = req.user as User;
@@ -35,20 +36,109 @@ class AuthController {
     });
   }
 
-  public async signup(req: Request, res: Response) {
-    if (!req) throw new HttpException(400, 'email is empty.');
-    if (!emailIsValid(req.body.email)) throw new HttpException(400, 'email is not valid.');
+  public static async signup(req: Request<{}, {}, UserSignupDTO>, res: Response) {
+    try {
+      const { email, password } = req.body;
 
-    const hashedPassword = await bcrypt.hash(req.body.password, PasswordSaltRound);
-    req.body.password = hashedPassword;
-    delete req.body.confirmPassword;
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email },
+      });
 
-    const newUser = await prisma.user.create({
-      data: req.body,
-    });
-    res.json({
-      user: newUser,
-    });
+      if (existingUser) {
+        return res.status(400).json({ message: 'User already exists' });
+      }
+
+      // Hash password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      // Create new user
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+        },
+      });
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user.id, email: user.email },
+        process.env.JWT_SECRET!,
+        { expiresIn: '24h' }
+      );
+
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user;
+
+      return res.status(201).json({
+        message: 'User created successfully',
+        user: userWithoutPassword,
+        token,
+      });
+    } catch (error) {
+      console.error('Signup error:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  public static async login(req: Request<{}, {}, UserLoginDTO>, res: Response) {
+    try {
+      const { email, password } = req.body;
+
+      // Find user
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Check password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: 'Invalid password' });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user.id, email: user.email },
+        process.env.JWT_SECRET!,
+        { expiresIn: '24h' }
+      );
+
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user;
+
+      return res.status(200).json({
+        message: 'Login successful',
+        user: userWithoutPassword,
+        token,
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  public static async me(req: Request, res: Response) {
+    try {
+      const user = req.user as User;
+      if (!user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user;
+
+      return res.status(200).json({
+        user: userWithoutPassword,
+      });
+    } catch (error) {
+      console.error('Me error:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
   }
 
   // public async forgotPassword(req: Request, res: Response) {
@@ -114,7 +204,9 @@ export default () => {
   const controller = new AuthController();
   const router = Router();
   router.post('/signin', passport.authenticate('local', { session: false }), controller.signin);
-  router.post('/signup', controller.signup);
+  router.post('/signup', AuthController.signup);
+  router.post('/login', AuthController.login);
+  router.get('/me', AuthController.me);
 
   // google oauth endpoints
 
