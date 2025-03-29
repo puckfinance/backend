@@ -43,11 +43,12 @@ model TradeAccount {
   name      String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  apiKey    String 
+  apiKey    String
   secretKey String
   provider  Provider
   user      User      @relation(fields: [userId], references: [id])
   userId    String
+  @@unique([apiKey, secretKey])
 }
 
 enum TradeSide {

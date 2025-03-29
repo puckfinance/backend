@@ -24,14 +24,8 @@ class TradeAccountController {
         where: { userId },
       });
       
-      // Decrypt keys before sending response
-      const decryptedAccounts = accounts.map((account) => ({
-        ...account,
-        apiKey: CryptoService.decrypt(account.apiKey),
-        secretKey: CryptoService.decrypt(account.secretKey),
-      }));
-      
-      res.json(decryptedAccounts);
+      // Return accounts with encrypted keys
+      res.json(accounts);
     } catch (error: any) {
       res.status(500).json({ message: error?.message || 'Failed to get trade accounts' });
     }
@@ -56,14 +50,8 @@ class TradeAccountController {
         return res.status(404).json({ message: 'Trade account not found' });
       }
       
-      // Decrypt keys before sending response
-      const decryptedAccount = {
-        ...account,
-        apiKey: CryptoService.decrypt(account.apiKey),
-        secretKey: CryptoService.decrypt(account.secretKey),
-      };
-      
-      res.json(decryptedAccount);
+      // Return account with encrypted keys
+      res.json(account);
     } catch (error: any) {
       res.status(500).json({ message: error?.message || 'Failed to get trade account' });
     }
