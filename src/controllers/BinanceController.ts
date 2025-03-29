@@ -11,7 +11,6 @@ class BinanceController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
     try {
       const entrySchema = z.object({
-        trade_account_id: z.string(),
         symbol: z.string(),
         side: z.enum(['BUY', 'SELL']),
         price: z.string().optional(),
@@ -22,14 +21,16 @@ class BinanceController {
         stoploss_price: z.string().optional(),
       });
 
-      let { trade_account_id, symbol, side, price, risk, risk_amount, action, stoploss_price, takeprofit_price } =
+      let { symbol, side, price, risk, risk_amount, action, stoploss_price, takeprofit_price } =
         await entrySchema.parseAsync(req.body);
 
       symbol = symbol?.split('.')?.[0];
 
-      if (!trade_account_id) throw new Error('trade_account_id is empty.');
       if (!symbol) throw new Error(`Symbol error ${symbol}`);
 
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
@@ -51,7 +52,6 @@ class BinanceController {
           if (!takeprofit_price) throw new Error('take_profit is empty.');
 
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
-
 
           const result = await BinanceFunctions.entry({
             client,
@@ -91,7 +91,12 @@ class BinanceController {
         case 'MOVE_STOPLOSS': {
           if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
-          const result = await BinanceFunctions.setStoploss({ client, symbol, side, price: parseFloat(stoploss_price) });
+          const result = await BinanceFunctions.setStoploss({
+            client,
+            symbol,
+            side,
+            price: parseFloat(stoploss_price),
+          });
 
           return res.status(200).json(result);
         }
@@ -130,7 +135,7 @@ class BinanceController {
 
   public async balance(req: Request, res: Response, _next: NextFunction) {
     try {
-      const trade_account_id = req.body.trade_account_id;
+      const trade_account_id = req.params.trade_account_id;
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
@@ -148,7 +153,7 @@ class BinanceController {
 
   public async income(req: Request, res: Response, _next: NextFunction) {
     try {
-      const trade_account_id = req.body.trade_account_id;
+      const trade_account_id = req.params.trade_account_id;
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
@@ -170,7 +175,7 @@ class BinanceController {
 
       if (!symbol) throw new Error('symbol is empty.');
 
-      const trade_account_id = req.body.trade_account_id;
+      const trade_account_id = req.params.trade_account_id;
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
@@ -192,7 +197,7 @@ class BinanceController {
 
       if (!symbol) throw new Error('symbol is empty.');
 
-      const trade_account_id = req.body.trade_account_id;
+      const trade_account_id = req.params.trade_account_id;
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
@@ -210,7 +215,7 @@ class BinanceController {
 
   public async openOrders(req: Request, res: Response, _next: NextFunction) {
     try {
-      const trade_account_id = req.body.trade_account_id;
+      const trade_account_id = req.params.trade_account_id;
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
@@ -231,13 +236,13 @@ class BinanceController {
       const startTime = parseFloat(req.query.startTime as string);
       const endTime = parseFloat(req.query.endTime as string);
 
-      const trade_account_id = req.body.trade_account_id;
+      const trade_account_id = req.params.trade_account_id;
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
-      if (!client) throw new Error('client not found.');  
+      if (!client) throw new Error('client not found.');
 
       const result = await BinanceFunctions.getSnapshot({ startTime, endTime, client });
 
@@ -253,13 +258,13 @@ export default () => {
   const router = Router();
   router.use(apiKeyMiddleware);
 
-  router.post('/entry', controller.entry);
-  router.post('/trade-history', controller.tradeHistory);
-  router.post('/current-position', controller.currentPosition);
-  router.post('/open-orders', controller.openOrders);
-  router.post('/balance', controller.balance);
-  router.post('/income', controller.income);
-  router.post('/snapshot', controller.getSnapshots);
+  router.post('/entry/:trade_account_id', controller.entry);
+  router.post('/trade-history/:trade_account_id', controller.tradeHistory);
+  router.post('/current-position/:trade_account_id', controller.currentPosition);
+  router.post('/open-orders/:trade_account_id', controller.openOrders);
+  router.post('/balance/:trade_account_id', controller.balance);
+  router.post('/income/:trade_account_id', controller.income);
+  router.post('/snapshot/:trade_account_id', controller.getSnapshots);
 
   return router;
 };
