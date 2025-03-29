@@ -2,6 +2,7 @@ import { Router } from 'express';
 import UserController from '../controllers/UserController';
 import BinanceController from '../controllers/BinanceController';
 import BybitController from '../controllers/BybitController';
+import TradeAccountController from '../controllers/TradeAccountController';
 import authRoutes from './auth.routes';
 
 /**
@@ -18,6 +19,7 @@ export default () => {
   routes.use('/users', UserController());
   routes.use('/binance', BinanceController());
   routes.use('/bybit', BybitController());
+  routes.use('/trade-accounts', TradeAccountController());
 
   return routes;
 };

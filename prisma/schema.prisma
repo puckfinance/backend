@@ -40,10 +40,12 @@ model TradeLog {
 
 model TradeAccount {
   id        String    @id @default(uuid())
+  name      String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   apiKey    String 
   secretKey String
+  provider  Provider
   user      User      @relation(fields: [userId], references: [id])
   userId    String
 }
@@ -51,4 +53,9 @@ model TradeAccount {
 enum TradeSide {
   LONG
   SHORT
+}
+
+enum Provider {
+  BINANCE
+  BYBIT
 }
