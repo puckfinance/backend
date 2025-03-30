@@ -5,11 +5,15 @@ import prisma from '../infrastructure/prisma';
 import { CryptoService } from '../services/crypto';
 import { z } from 'zod';
 
-const tradeAccountSchema = z.object({
+const createTradeAccountSchema = z.object({
   apiKey: z.string(),
   secretKey: z.string(),
   name: z.string(),
   provider: z.nativeEnum(Provider),
+});
+
+const updateTradeAccountSchema = z.object({
+  name: z.string(),
 });
 
 class TradeAccountController {
@@ -65,7 +69,7 @@ class TradeAccountController {
       const userId = (req.user as User).id;
       
       // Validate request body
-      const { apiKey, secretKey, name, provider } = tradeAccountSchema.parse(req.body);
+      const { apiKey, secretKey, name, provider } = createTradeAccountSchema.parse(req.body);
       
       // Encrypt sensitive data
       const encryptedApiKey = CryptoService.encrypt(apiKey);
@@ -106,7 +110,7 @@ class TradeAccountController {
       const accountId = req.params.id;
       
       // Validate request body
-      const { apiKey, secretKey, name } = tradeAccountSchema.parse(req.body);
+      const { name } = updateTradeAccountSchema.parse(req.body);
       
       // Check if account exists and belongs to user
       const existingAccount = await prisma.tradeAccount.findFirst({
@@ -131,8 +135,6 @@ class TradeAccountController {
       // Return the account with decrypted keys in the response
       const responseAccount = {
         ...updatedAccount,
-        apiKey,
-        secretKey,
       };
       
       res.json(responseAccount);

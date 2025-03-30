@@ -259,12 +259,12 @@ export default () => {
   router.use(apiKeyMiddleware);
 
   router.post('/entry/:trade_account_id', controller.entry);
-  router.post('/trade-history/:trade_account_id', controller.tradeHistory);
-  router.post('/current-position/:trade_account_id', controller.currentPosition);
-  router.post('/open-orders/:trade_account_id', controller.openOrders);
-  router.post('/balance/:trade_account_id', controller.balance);
-  router.post('/income/:trade_account_id', controller.income);
-  router.post('/snapshot/:trade_account_id', controller.getSnapshots);
+  router.get('/trade-history/:trade_account_id', controller.tradeHistory);
+  router.get('/current-position/:trade_account_id', controller.currentPosition);
+  router.get('/open-orders/:trade_account_id', controller.openOrders);
+  router.get('/balance/:trade_account_id', controller.balance);
+  router.get('/income/:trade_account_id', controller.income);
+  router.get('/snapshot/:trade_account_id', controller.getSnapshots);
 
   return router;
 };

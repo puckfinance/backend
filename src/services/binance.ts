@@ -18,10 +18,8 @@ export const loadBinanceClient = async (tradeAccountId: string): Promise<Binance
   const apiKey = CryptoService.decrypt(tradeAccount.apiKey);
   const secretKey = CryptoService.decrypt(tradeAccount.secretKey);
 
-  
   console.log('Connecting to Binance');
   console.log('Environment', process.env.NODE_ENV);
-  console.log({ apiKey, secretKey });
 
   return Binance({
     apiKey: apiKey,
