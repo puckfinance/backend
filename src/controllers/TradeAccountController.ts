@@ -106,7 +106,7 @@ class TradeAccountController {
       const accountId = req.params.id;
       
       // Validate request body
-      const { apiKey, secretKey } = tradeAccountSchema.parse(req.body);
+      const { apiKey, secretKey, name } = tradeAccountSchema.parse(req.body);
       
       // Check if account exists and belongs to user
       const existingAccount = await prisma.tradeAccount.findFirst({
@@ -120,16 +120,11 @@ class TradeAccountController {
         return res.status(404).json({ message: 'Trade account not found' });
       }
       
-      // Encrypt sensitive data
-      const encryptedApiKey = CryptoService.encrypt(apiKey);
-      const encryptedSecretKey = CryptoService.encrypt(secretKey);
-      
       // Update account
       const updatedAccount = await prisma.tradeAccount.update({
         where: { id: accountId },
         data: {
-          apiKey: encryptedApiKey,
-          secretKey: encryptedSecretKey,
+          name,
         },
       });
       
