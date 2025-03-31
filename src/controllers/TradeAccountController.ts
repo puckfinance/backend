@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import * as passport from 'passport';
+import passport from 'passport';
 import { User, Provider } from '@prisma/client';
 import prisma from '../infrastructure/prisma';
 import { CryptoService } from '../services/crypto';

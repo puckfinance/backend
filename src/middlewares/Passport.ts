@@ -1,5 +1,5 @@
-import * as bcrypt from 'bcrypt';
-import * as passport from 'passport';
+import bcrypt from 'bcrypt';
+import passport from 'passport';
 import { ExtractJwt, Strategy as JWTStrategy } from 'passport-jwt';
 import { Strategy as LocalStrategy } from 'passport-local';
 import prisma from '../infrastructure/prisma';

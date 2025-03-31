@@ -1,5 +1,5 @@
 import prisma from '../infrastructure/prisma';
-import passport = require('passport');
+import passport from 'passport';
 import { Request, Response, Router } from 'express';
 import { User } from '@prisma/client';
 import logger from '../utils/Logger';

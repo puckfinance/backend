@@ -1,4 +1,4 @@
-import * as redis from 'redis';
+import redis from 'redis';
 
 let client = redis.createClient({
   url: process.env.REDIS_URL,

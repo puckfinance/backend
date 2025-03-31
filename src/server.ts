@@ -1,8 +1,8 @@
-import * as express from 'express';
+import express from 'express';
 import { createServer, Server } from 'http';
 import { SystemDefaults } from './constants';
 
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 import { run } from './app';
 import { connectPrisma, disconnectPrisma } from './infrastructure/prisma';
 import logger from './utils/Logger';

@@ -1,14 +1,14 @@
 import { User } from '@prisma/client';
-import * as passport from 'passport';
+import passport from 'passport';
 
-import * as bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt';
 import { NextFunction, Request, Response, Router } from 'express';
 import { PasswordSaltRound } from '../constants';
 import HttpException from '../utils/HttpException';
 import prisma from '../infrastructure/prisma';
 import { JwtService } from '../services/jwt';
 import { JWTPayload } from '../interfaces';
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { UserLoginDTO, UserSignupDTO } from '../interfaces/User';
 import logger from '../utils/Logger';
 /**

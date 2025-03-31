@@ -1,4 +1,4 @@
-import * as express from 'express';
+import express from 'express';
 import HttpException from '../utils/HttpException';
 import logger from '../utils/Logger';
 

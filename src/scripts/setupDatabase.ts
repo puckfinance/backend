@@ -1,7 +1,7 @@
 import { exec } from 'child_process';
-import * as dotenv from 'dotenv';
-import * as util from 'util';
-import * as path from 'path';
+import dotenv from 'dotenv';
+import util from 'util';
+import path from 'path';
 
 // Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });

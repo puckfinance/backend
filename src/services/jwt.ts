@@ -1,6 +1,6 @@
 import { JWTPayload } from '../interfaces';
 import { JWTExpire } from '../constants';
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 
 const jwtSecret = process.env.JWT_SECRET || '';
 export namespace JwtService {

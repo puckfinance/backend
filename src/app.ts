@@ -1,8 +1,8 @@
 import cors from 'cors';
 import express from 'express';
 import morgan from 'morgan';
-import * as passport from 'passport';
-import * as dotenv from 'dotenv';
+import passport from 'passport';
+import dotenv from 'dotenv';
 import Routes from './routes';
 import { ErrorResponse } from './middlewares';
 import NodeCache from 'node-cache';
