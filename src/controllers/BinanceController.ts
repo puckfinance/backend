@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import BinanceFunctions, { binanceClient } from '../services/binance';
+import BinanceFunctions from '../services/binance';
 import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
@@ -28,11 +28,17 @@ class BinanceController {
 
       if (!symbol) throw new Error(`Symbol error ${symbol}`);
 
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
       // cancel all open orders if there is no open position
-      const positions = await BinanceFunctions.currentPositions(symbol);
+      const positions = await BinanceFunctions.currentPositions(client, symbol);
       if (positions.length === 0) {
         console.log('Cancelling all open orders');
-        await binanceClient.futuresCancelAllOpenOrders({
+        await client.futuresCancelAllOpenOrders({
           symbol,
         });
       }
@@ -48,6 +54,7 @@ class BinanceController {
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
           const result = await BinanceFunctions.entry({
+            client,
             symbol,
             side,
             entryPrice: parseFloat(price),
@@ -69,6 +76,7 @@ class BinanceController {
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
           const result = await BinanceFunctions.entryLimit({
+            client,
             symbol,
             side,
             entryPrice: parseFloat(price),
@@ -83,7 +91,12 @@ class BinanceController {
         case 'MOVE_STOPLOSS': {
           if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
-          const result = await BinanceFunctions.setStoploss({ symbol, side, price: parseFloat(stoploss_price) });
+          const result = await BinanceFunctions.setStoploss({
+            client,
+            symbol,
+            side,
+            price: parseFloat(stoploss_price),
+          });
 
           return res.status(200).json(result);
         }
@@ -91,7 +104,7 @@ class BinanceController {
         case 'EXIT': {
           if (positions.length === 0) {
             console.log('Cancelling all open orders');
-            await binanceClient.futuresCancelAllOpenOrders({
+            await client.futuresCancelAllOpenOrders({
               symbol,
             });
           } else {
@@ -102,11 +115,11 @@ class BinanceController {
               quantity: `${positions[0].positionAmt}`,
             };
 
-            await binanceClient.futuresCancelAllOpenOrders({
+            await client.futuresCancelAllOpenOrders({
               symbol,
             });
 
-            await binanceClient.futuresOrder(closeOrder);
+            await client.futuresOrder(closeOrder);
           }
 
           return res.status(200).json({ result: 'Cancelling all open orders' });
@@ -120,9 +133,17 @@ class BinanceController {
     }
   }
 
-  public async balance(_req: Request, res: Response, _next: NextFunction) {
+  public async balance(req: Request, res: Response, _next: NextFunction) {
     try {
-      const result = await BinanceFunctions.getCurrentBalance();
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.getCurrentBalance(client);
 
       res.status(200).json(result);
     } catch (error: any) {
@@ -130,9 +151,17 @@ class BinanceController {
     }
   }
 
-  public async income(_req: Request, res: Response, _next: NextFunction) {
+  public async income(req: Request, res: Response, _next: NextFunction) {
     try {
-      const result = await BinanceFunctions.getIncome();
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.getIncome(client);
 
       res.json(result);
     } catch (error: any) {
@@ -146,7 +175,15 @@ class BinanceController {
 
       if (!symbol) throw new Error('symbol is empty.');
 
-      const result = await BinanceFunctions.getTradeHistory(symbol, 1000);
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.getTradeHistory(client, symbol, 1000);
 
       res.json(result);
     } catch (error: any) {
@@ -160,7 +197,15 @@ class BinanceController {
 
       if (!symbol) throw new Error('symbol is empty.');
 
-      const result = await BinanceFunctions.currentPositions(symbol);
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.currentPositions(client, symbol);
 
       res.status(200).json(result);
     } catch (error: any) {
@@ -168,13 +213,17 @@ class BinanceController {
     }
   }
 
-  public async openOrders(_req: Request, res: Response, _next: NextFunction) {
+  public async openOrders(req: Request, res: Response, _next: NextFunction) {
     try {
-      // const symbol = req.query.symbol as string;
+      const trade_account_id = req.params.trade_account_id;
 
-      // if (!symbol) throw new Error('symbol is empty.');
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
-      const result = await BinanceFunctions.getOpenOrders();
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.getOpenOrders(client);
 
       res.status(200).json(result);
     } catch (error: any) {
@@ -187,7 +236,15 @@ class BinanceController {
       const startTime = parseFloat(req.query.startTime as string);
       const endTime = parseFloat(req.query.endTime as string);
 
-      const result = await BinanceFunctions.getSnapshot({ startTime, endTime });
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.getSnapshot({ startTime, endTime, client });
 
       res.status(200).json(result);
     } catch (error: any) {
@@ -201,13 +258,13 @@ export default () => {
   const router = Router();
   router.use(apiKeyMiddleware);
 
-  router.post('/entry', controller.entry);
-  router.get('/trade-history', controller.tradeHistory);
-  router.get('/current-position', controller.currentPosition);
-  router.get('/open-orders', controller.openOrders);
-  router.get('/balance', controller.balance);
-  router.get('/income', controller.income);
-  router.get('/snapshot', controller.getSnapshots);
+  router.post('/entry/:trade_account_id', controller.entry);
+  router.get('/trade-history/:trade_account_id', controller.tradeHistory);
+  router.get('/current-position/:trade_account_id', controller.currentPosition);
+  router.get('/open-orders/:trade_account_id', controller.openOrders);
+  router.get('/balance/:trade_account_id', controller.balance);
+  router.get('/income/:trade_account_id', controller.income);
+  router.get('/snapshot/:trade_account_id', controller.getSnapshots);
 
   return router;
 };

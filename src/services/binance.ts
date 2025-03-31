@@ -1,21 +1,36 @@
-import Binance, { NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
+import Binance, { Binance as BinanceType, NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
 
 import * as moment from 'moment';
 import { cache } from '../app';
+import prisma from '../infrastructure/prisma';
+import { CryptoService } from './crypto';
 
-const config = {
-  apiKey: process.env.BINANCE_API_KEY,
-  apiSecret: process.env.BINANCE_SECRET_KEY,
-  getTime: () => moment().unix() * 1000,
-  ...(process.env.NODE_ENV === 'development' && {
-    httpFutures: 'https://testnet.binancefuture.com',
-    wsFutures: 'wss://stream.binancefuture.com',
-  }),
+export const loadBinanceClient = async (tradeAccountId: string): Promise<BinanceType> => {
+  const tradeAccount = await prisma.tradeAccount.findUnique({
+    where: {
+      id: tradeAccountId,
+    },
+  });
+
+  if (!tradeAccount) throw new Error('tradeAccount not found.');
+
+  // decrypt keys
+  const apiKey = CryptoService.decrypt(tradeAccount.apiKey);
+  const secretKey = CryptoService.decrypt(tradeAccount.secretKey);
+
+  console.log('Connecting to Binance');
+  console.log('Environment', process.env.NODE_ENV);
+
+  return Binance({
+    apiKey: apiKey,
+    apiSecret: secretKey,
+    getTime: () => moment().unix() * 1000,
+    ...(process.env.NODE_ENV === 'development' && {
+      httpFutures: 'https://testnet.binancefuture.com',
+      wsFutures: 'wss://stream.binancefuture.com',
+    }),
+  });
 };
-
-console.log({ config });
-
-export const binanceClient = Binance(config);
 
 export const countDecimals = (num: number) => {
   if (Math.floor(num) === num) return 0;
@@ -26,12 +41,12 @@ export const convertToPrecision = (num: number, precision: number) => {
   return Math.trunc(num * Math.pow(10, precision)) / Math.pow(10, precision);
 };
 
-const checkConnection = () => {
-  return binanceClient.ping();
+const checkConnection = (client: BinanceType) => {
+  return client.ping();
 };
 
-const currentPositions = async (symbol: string) => {
-  const accountInfo = await binanceClient.futuresAccountInfo();
+const currentPositions = async (client: BinanceType, symbol: string) => {
+  const accountInfo = await client.futuresAccountInfo();
 
   const positions = accountInfo.positions.filter((item) => parseFloat(item.entryPrice) > 0 && item.symbol === symbol);
   return positions;
@@ -49,6 +64,7 @@ interface EntryProps {
     where: number;
     qty: number;
   }[];
+  client: BinanceType;
 }
 
 const entry = async ({
@@ -60,6 +76,7 @@ const entry = async ({
   side,
   stoplossPrice,
   takeProfitPrice,
+  client,
 }: EntryProps) => {
   const { qty, tickSize, quantityPrecision } = await getTradeEntryInformation({
     symbol,
@@ -67,6 +84,7 @@ const entry = async ({
     risk_amount,
     entryPrice,
     stoplossPrice,
+    client,
   });
 
   const entryOrder: NewFuturesOrder = {
@@ -78,7 +96,7 @@ const entry = async ({
 
   // entry
   let origQty: number = 0;
-  const executedEntryOrder = await binanceClient.futuresOrder(entryOrder);
+  const executedEntryOrder = await client.futuresOrder(entryOrder);
 
   console.log(`ENTRY`);
   console.log({ executedEntryOrder });
@@ -103,7 +121,7 @@ const entry = async ({
   let executedStoplossOrder;
 
   try {
-    executedStoplossOrder = await binanceClient.futuresOrder(stopLossOrder);
+    executedStoplossOrder = await client.futuresOrder(stopLossOrder);
 
     console.log(`STOPLOSS`);
     console.log({ executedStoplossOrder });
@@ -116,7 +134,7 @@ const entry = async ({
       side: side === 'BUY' ? 'SELL' : 'BUY',
       quantity: `${qty}`,
     };
-    await binanceClient.futuresOrder(closeOrder);
+    await client.futuresOrder(closeOrder);
   }
 
   // takeprofit
@@ -145,7 +163,7 @@ const entry = async ({
   let executedTakeProfitOrder;
 
   try {
-    executedTakeProfitOrder = await binanceClient.futuresOrder(takeProfitOrder);
+    executedTakeProfitOrder = await client.futuresOrder(takeProfitOrder);
     console.log(`TAKEPROFIT`);
     console.log({ executedTakeProfitOrder });
   } catch (error) {
@@ -175,7 +193,7 @@ const entry = async ({
     };
 
     try {
-      const executedTakeProfitOrder = await binanceClient.futuresOrder(takeProfitLimitOrder as any);
+      const executedTakeProfitOrder = await client.futuresOrder(takeProfitLimitOrder as any);
 
       console.log(`TAKEPROFIT ${item.where} - ${item.qty}`);
       console.log({ executedTakeProfitOrder });
@@ -202,6 +220,7 @@ const entryLimit = async ({
   side,
   stoplossPrice,
   takeProfitPrice,
+  client,
 }: EntryProps) => {
   const { qty, tickSize } = await getTradeEntryInformation({
     symbol,
@@ -209,6 +228,7 @@ const entryLimit = async ({
     risk_amount,
     entryPrice,
     stoplossPrice,
+    client,
   });
 
   const entryOrder: NewFuturesOrder = {
@@ -252,7 +272,7 @@ const entryLimit = async ({
     quantity: `${currentQty}`,
   };
 
-  const executedOrders = await binanceClient.futuresBatchOrders({
+  const executedOrders = await client.futuresBatchOrders({
     batchOrders: [entryOrder, stopLossOrder, takeProfitOrder],
   });
 
@@ -263,9 +283,9 @@ const entryLimit = async ({
   };
 };
 
-const setStoploss = async ({ symbol, price, side }: { symbol: string; price: number; side: OrderSide_LT }) => {
+const setStoploss = async ({ symbol, price, side, client }: { symbol: string; price: number; side: OrderSide_LT; client: BinanceType }) => {
   /* get precisions */
-  const info = await binanceClient.futuresExchangeInfo();
+  const info = await client.futuresExchangeInfo();
   const symbolInfo = info.symbols.find((item) => item.symbol === symbol);
 
   if (!symbolInfo) throw new Error('symbolInfo is undefined.');
@@ -273,7 +293,7 @@ const setStoploss = async ({ symbol, price, side }: { symbol: string; price: num
   const priceFilter = symbolInfo.filters.find((item) => item.filterType === 'PRICE_FILTER');
   const tickSize = countDecimals(parseFloat((priceFilter as any).tickSize as string));
 
-  const currentPosition = await getPosition(symbol);
+  const currentPosition = await getPosition(symbol, client);
 
   if (!currentPosition) throw new Error('currentPosition is undefined.');
 
@@ -284,7 +304,7 @@ const setStoploss = async ({ symbol, price, side }: { symbol: string; price: num
   // remove previous stop market orders
 
   // list previous orders
-  const orders = await binanceClient.futuresOpenOrders({ symbol });
+  const orders = await client.futuresOpenOrders({ symbol });
   // cancel orders
   const orderIdList = orders?.flatMap(({ orderId, origType }) => {
     if (origType === 'STOP_MARKET') return orderId;
@@ -294,7 +314,7 @@ const setStoploss = async ({ symbol, price, side }: { symbol: string; price: num
   console.log({ orderIdList, string: JSON.stringify(orderIdList) });
 
   if (Array.isArray(orderIdList) && orderIdList.length > 0)
-    await binanceClient.futuresCancelBatchOrders({ symbol, orderIdList: JSON.stringify(orderIdList) });
+    await client.futuresCancelBatchOrders({ symbol, orderIdList: JSON.stringify(orderIdList) });
 
   const stopLossOrder: NewFuturesOrder = {
     symbol: symbol,
@@ -306,7 +326,7 @@ const setStoploss = async ({ symbol, price, side }: { symbol: string; price: num
   };
 
   try {
-    const executedStopLossOrder = await binanceClient.futuresOrder(stopLossOrder);
+    const executedStopLossOrder = await client.futuresOrder(stopLossOrder);
 
     console.log('MOVE STOPLOSS');
     console.log({ executedStopLossOrder });
@@ -316,22 +336,22 @@ const setStoploss = async ({ symbol, price, side }: { symbol: string; price: num
   }
 };
 
-const getPosition = async (symbol: string) => {
+const getPosition = async (symbol: string, client: BinanceType) => {
   console.log({ symbol });
 
-  const positions = await currentPositions(symbol);
+  const positions = await currentPositions(client, symbol);
 
   return positions.find((item) => item.symbol === symbol) || undefined;
 };
 
-const getCurrentBalance = async () => {
-  const balances = await binanceClient.futuresAccountBalance();
+const getCurrentBalance = async (client: BinanceType) => {
+  const balances = await client.futuresAccountBalance();
   const balance = balances.find((item) => item.asset === process.env.CURRENCY);
   return balance;
 };
 
-const getTradeHistory = async (symbol: string, limit: number) => {
-  const trade = await binanceClient.futuresUserTrades({
+const getTradeHistory = async (client: BinanceType, symbol: string, limit: number) => {
+  const trade = await client.futuresUserTrades({
     symbol,
     limit,
   });
@@ -343,8 +363,8 @@ const getTradeHistory = async (symbol: string, limit: number) => {
   });
 };
 
-const getIncome = async () => {
-  const result = await binanceClient.futuresIncome({
+const getIncome = async (client: BinanceType) => {
+  const result = await client.futuresIncome({
     incomeType: 'REALIZED_PNL',
     limit: 1000,
   });
@@ -352,13 +372,13 @@ const getIncome = async () => {
   return result;
 };
 
-const getOpenOrders = async () => {
-  const orders = await binanceClient.futuresOpenOrders({});
+const getOpenOrders = async (client: BinanceType) => {
+  const orders = await client.futuresOpenOrders({});
   return orders;
 };
 
-const getPnl = async () => {
-  const orders = await binanceClient.futuresIncome({
+const getPnl = async (client: BinanceType) => {
+  const orders = await client.futuresIncome({
     symbol: process.env.TRADE_PAIR,
     startTime: moment().subtract(3, 'month').unix() * 1000,
     endTime: moment().unix() * 1000,
@@ -371,9 +391,11 @@ const getPnl = async () => {
 const getSnapshot = async ({
   startTime = moment().subtract(1, 'month').unix() * 1000,
   endTime = moment().unix() * 1000,
+  client,
 }: {
   startTime: number;
   endTime: number;
+  client: BinanceType;
 }) => {
   const cacheKey = ['snapshot', startTime, endTime].join('-');
 
@@ -381,7 +403,7 @@ const getSnapshot = async ({
 
   if (cacheData) return cacheData;
 
-  const snapshots = await binanceClient.accountSnapshot({
+  const snapshots = await client.accountSnapshot({
     type: 'FUTURES',
     startTime,
     endTime,
@@ -399,26 +421,27 @@ const getTradeEntryInformation = async ({
   risk,
   entryPrice,
   stoplossPrice,
-}: Pick<EntryProps, 'symbol' | 'risk' | 'risk_amount' | 'entryPrice' | 'stoplossPrice'>): Promise<{
+  client,
+}: Pick<EntryProps, 'symbol' | 'risk' | 'risk_amount' | 'entryPrice' | 'stoplossPrice' | 'client'>): Promise<{
   qty: number;
   tickSize: number;
   quantityPrecision: number;
 }> => {
   /* no entry on current position */
 
-  const positions = await currentPositions(symbol);
+  const positions = await currentPositions(client, symbol);
 
   if (positions.length > 0) {
     console.log('Cancelled opening position');
     throw new Error('Currently in a trade.');
   }
 
-  const balances = await binanceClient.futuresAccountBalance();
+  const balances = await client.futuresAccountBalance();
 
   const balance = balances.find((item) => item.asset === process.env.CURRENCY);
 
   /* get precisions */
-  const info = await binanceClient.futuresExchangeInfo();
+  const info = await client.futuresExchangeInfo();
 
   const symbolInfo = info.symbols.find((item) => item.symbol === symbol);
 
@@ -435,7 +458,7 @@ const getTradeEntryInformation = async ({
 
   if (!balance) throw new Error('balance is undefined.');
 
-  const trade = await binanceClient.futuresTrades({
+  const trade = await client.futuresTrades({
     symbol: symbol,
     limit: 1,
   });
@@ -453,7 +476,7 @@ const getTradeEntryInformation = async ({
 
   console.log({ riskAmount, setLeverage, qty });
 
-  const leverage = await binanceClient.futuresLeverage({
+  const leverage = await client.futuresLeverage({
     symbol: symbol,
     leverage: setLeverage,
   });
@@ -482,6 +505,7 @@ const BinanceFunctions = {
   getOpenOrders,
   getIncome,
   getSnapshot,
+  loadBinanceClient,
 };
 
 export default BinanceFunctions;

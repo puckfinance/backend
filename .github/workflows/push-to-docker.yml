@@ -22,12 +22,12 @@ jobs:
 
       - name: Build and tag Docker image
         run: |
-          docker build -t nyamkamunhjin/binance-bot-v2:latest .
+          docker build -t nyamkamunhjin/binance-bot-v3:latest .
         working-directory: ./
 
       - name: Push Docker image to DockerHub
         run: |
-          docker push nyamkamunhjin/binance-bot-v2:latest
+          docker push nyamkamunhjin/binance-bot-v3:latest
         working-directory: ./
 
   update-container:

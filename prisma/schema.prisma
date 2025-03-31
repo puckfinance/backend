@@ -17,6 +17,8 @@ model User {
   email     String     @unique
   password  String
   TradeLog  TradeLog[]
+
+  TradeAccount TradeAccount[]
 }
 
 model TradeLog {
@@ -36,7 +38,25 @@ model TradeLog {
   userId          String
 }
 
+model TradeAccount {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  apiKey    String
+  secretKey String
+  provider  Provider
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  @@unique([apiKey, secretKey])
+}
+
 enum TradeSide {
   LONG
   SHORT
+}
+
+enum Provider {
+  BINANCE
+  BYBIT
 }
