@@ -2,7 +2,6 @@ import { User } from '@prisma/client';
 import passport from 'passport';
 
 import { NextFunction, Request, Response, Router } from 'express';
-import { PasswordSaltRound } from '../constants';
 import HttpException from '../utils/HttpException';
 import prisma from '../infrastructure/prisma';
 import { JwtService } from '../services/jwt';
