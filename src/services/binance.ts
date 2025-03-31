@@ -1,9 +1,10 @@
 import Binance, { Binance as BinanceType, NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
 
-import * as moment from 'moment';
+import moment from 'moment';
 import { cache } from '../app';
 import prisma from '../infrastructure/prisma';
 import { CryptoService } from './crypto';
+import logger from '../utils/Logger';
 
 export const loadBinanceClient = async (tradeAccountId: string): Promise<BinanceType> => {
   const tradeAccount = await prisma.tradeAccount.findUnique({
@@ -18,8 +19,8 @@ export const loadBinanceClient = async (tradeAccountId: string): Promise<Binance
   const apiKey = CryptoService.decrypt(tradeAccount.apiKey);
   const secretKey = CryptoService.decrypt(tradeAccount.secretKey);
 
-  console.log('Connecting to Binance');
-  console.log('Environment', process.env.NODE_ENV);
+  logger.info('Connecting to Binance');
+  logger.info(`Environment: ${process.env.NODE_ENV}`);
 
   return Binance({
     apiKey: apiKey,

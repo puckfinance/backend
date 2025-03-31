@@ -15,17 +15,30 @@ RUN pnpm prune --prod
 
 FROM node:18-alpine
 
+# Install tini for better process handling
+RUN apk add --no-cache tini
+
+WORKDIR /app
+
 COPY --from=builder /app/built ./built
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
-# Set production environment
+# Set production environment variables
 ENV NODE_ENV=production
-# Configure logger to ensure logs appear in Docker
 ENV LOG_LEVEL=info
+# Increase Node memory limits for production
+ENV NODE_OPTIONS="--max-old-space-size=2048 --max-http-header-size=16384"
+# Set timeout for handling slow requests without crashing
+ENV TIMEOUT=120000
 
-# Ensure container runs with PID 1 to properly handle signals
-ENTRYPOINT ["node"]
-CMD ["./built/server.js"]
+# Ensure proper kernel signal handling with tini
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "./built/server.js"]
+
+# Add healthcheck to help Docker detect and restart unhealthy containers
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget -q --spider http://localhost:80/ || exit 1
 
 # Expose the application port
 EXPOSE 80

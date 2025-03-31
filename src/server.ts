@@ -67,16 +67,70 @@ class MainServer {
       process.exit(0);
     });
 
-    // Handle uncaught exceptions
+    // Handle uncaught exceptions - but in production, try to keep the server running
     process.on('uncaughtException', async (error) => {
       logger.error('Uncaught Exception:', error);
-      await this.shutdown();
-      process.exit(1);
+      
+      // In production, log the error but try to keep the server running unless it's a critical error
+      if (process.env.NODE_ENV === 'production') {
+        // Only exit if it's a critical error we can't recover from
+        if (this.isCriticalError(error)) {
+          logger.error('Critical error detected, shutting down server...');
+          await this.shutdown();
+          process.exit(1);
+        } else {
+          logger.error('Non-critical error, attempting to continue operation');
+        }
+      } else {
+        // In development, exit on any uncaught exception for easier debugging
+        await this.shutdown();
+        process.exit(1);
+      }
     });
 
+    // Handle unhandled promise rejections
     process.on('unhandledRejection', async (reason, promise) => {
       logger.error('Unhandled Rejection at:', { promise, reason });
+      
+      // In production, log the error but don't exit the process
+      if (process.env.NODE_ENV !== 'production') {
+        // In development, exit for easier debugging
+        logger.error('Exiting due to unhandled promise rejection in development mode');
+        await this.shutdown();
+        process.exit(1);
+      }
     });
+  }
+
+  /**
+   * Determine if an error is critical enough to warrant shutting down the server
+   */
+  private isCriticalError(error: Error): boolean {
+    // Define what constitutes a critical error
+    const criticalErrorTypes = [
+      'SystemError',
+      'ReferenceError'
+    ];
+    
+    // Check if error is from a critical subsystem
+    const criticalErrorMessages = [
+      'database connection',
+      'out of memory',
+      'prisma',
+      'ECONNREFUSED'
+    ];
+    
+    // Check error type
+    if (criticalErrorTypes.some(type => error.name === type)) {
+      return true;
+    }
+    
+    // Check error message
+    if (criticalErrorMessages.some(msg => error.message.toLowerCase().includes(msg))) {
+      return true;
+    }
+    
+    return false;
   }
 
   /**
