@@ -86,6 +86,8 @@ export class AuthController {
   public static async login(req: Request<{}, {}, UserLoginDTO>, res: Response) {
     try {
       const { email, password } = req.body;
+      logger.info('Login request received:', { email, password });
+      logger.info(`JWT_SECRET: ${process.env.JWT_SECRET}`);
 
       // Find user
       const user = await prisma.user.findUnique({
