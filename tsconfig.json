@@ -6,7 +6,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "removeComments": true,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "target": "ES2019",
     "noImplicitAny": true,
@@ -19,5 +20,9 @@
     },
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "__tests__/redis.test.ts"]
+  "include": ["src/**/*.ts", "__tests__/redis.test.ts"],
+  "ts-node": {
+    "transpileOnly": true,
+    "esm": true
+  }
 }
