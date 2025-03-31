@@ -6,6 +6,7 @@ import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
 import Log from '../services/log';
+import logger from '../utils/Logger';
 
 class BybitController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
@@ -33,6 +34,8 @@ class BybitController {
 
       if (!symbol) throw new Error(`Symbol error ${symbol}`);
 
+      logger.info(`Processing ${action} for ${symbol} with side ${side}`);
+
       // cancel all open orders if there is no open position
       const positions = await bybitClient.getPositionInfo({
         category: 'linear',
@@ -40,7 +43,7 @@ class BybitController {
       });
 
       if (positions.result.list.length === 0) {
-        console.log('Cancelling all open orders');
+        logger.info('Cancelling all open orders');
         await bybitClient.cancelAllOrders({
           category: 'linear',
         });
@@ -56,6 +59,8 @@ class BybitController {
 
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
+          logger.info(`Entry order for ${symbol}: ${side} at ${price} with SL ${stoploss_price} and TP ${takeprofit_price}`);
+          
           const result = await BybitFunctions.entry({
             symbol,
             side: bybitSides[side],
@@ -71,6 +76,8 @@ class BybitController {
         case 'MOVE_STOPLOSS': {
           if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
+          logger.info(`Moving stoploss for ${symbol} to ${stoploss_price}`);
+          
           const result = await BybitFunctions.setStoploss({ symbol, price: parseFloat(stoploss_price) });
 
           return res.status(200).json(result);
@@ -79,7 +86,7 @@ class BybitController {
 
       res.json({ success: true });
     } catch (error: any) {
-      console.log({ error: error?.message });
+      logger.error('Error in Bybit entry endpoint', error);
       Log.sendLog({ error });
 
       res.status(500).json({ error: error?.message || '' });
@@ -88,12 +95,15 @@ class BybitController {
 
   public async balance(_req: Request, res: Response, _next: NextFunction) {
     try {
-       const balances = await bybitClient.getWalletBalance({
+      logger.info('Getting Bybit wallet balance');
+      
+      const balances = await bybitClient.getWalletBalance({
         accountType: 'UNIFIED',
       });
 
       res.status(200).json(balances);
     } catch (error: any) {
+      logger.error('Error getting Bybit balance', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }

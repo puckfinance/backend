@@ -6,6 +6,7 @@ import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
 import { NewFuturesOrder } from 'binance-api-node';
+import logger from '../utils/Logger';
 
 class BinanceController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
@@ -32,12 +33,14 @@ class BinanceController {
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
+      logger.info(`Processing ${action} for ${symbol} on account ${trade_account_id}`);
+      
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       // cancel all open orders if there is no open position
       const positions = await BinanceFunctions.currentPositions(client, symbol);
       if (positions.length === 0) {
-        console.log('Cancelling all open orders');
+        logger.info(`Cancelling all open orders for ${symbol}`);
         await client.futuresCancelAllOpenOrders({
           symbol,
         });
@@ -53,6 +56,8 @@ class BinanceController {
 
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
+          logger.info(`Entry order for ${symbol}: ${side} at ${price} with SL ${stoploss_price} and TP ${takeprofit_price}`);
+          
           const result = await BinanceFunctions.entry({
             client,
             symbol,
@@ -75,6 +80,8 @@ class BinanceController {
 
           if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
+          logger.info(`Entry limit order for ${symbol}: ${side} at ${price} with SL ${stoploss_price} and TP ${takeprofit_price}`);
+          
           const result = await BinanceFunctions.entryLimit({
             client,
             symbol,
@@ -91,6 +98,8 @@ class BinanceController {
         case 'MOVE_STOPLOSS': {
           if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
+          logger.info(`Moving stoploss for ${symbol} to ${stoploss_price}`);
+          
           const result = await BinanceFunctions.setStoploss({
             client,
             symbol,
@@ -103,11 +112,13 @@ class BinanceController {
 
         case 'EXIT': {
           if (positions.length === 0) {
-            console.log('Cancelling all open orders');
+            logger.info(`Cancelling all open orders for ${symbol}`);
             await client.futuresCancelAllOpenOrders({
               symbol,
             });
           } else {
+            logger.info(`Exiting position for ${symbol}, current position: ${positions[0].positionAmt}`);
+            
             const closeOrder: NewFuturesOrder = {
               symbol: symbol,
               type: 'MARKET',
@@ -128,7 +139,7 @@ class BinanceController {
 
       res.json({ success: true });
     } catch (error: any) {
-      console.log({ error: error?.message });
+      logger.error('Error in Binance entry endpoint', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -139,6 +150,8 @@ class BinanceController {
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
+      logger.info(`Getting balance for account ${trade_account_id}`);
+      
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       if (!client) throw new Error('client not found.');
@@ -147,6 +160,7 @@ class BinanceController {
 
       res.status(200).json(result);
     } catch (error: any) {
+      logger.error('Error getting Binance balance', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -157,6 +171,8 @@ class BinanceController {
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
+      logger.info(`Getting income for account ${trade_account_id}`);
+      
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       if (!client) throw new Error('client not found.');
@@ -165,6 +181,7 @@ class BinanceController {
 
       res.json(result);
     } catch (error: any) {
+      logger.error('Error getting Binance income', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -179,6 +196,8 @@ class BinanceController {
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
+      logger.info(`Getting trade history for ${symbol} on account ${trade_account_id}`);
+      
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       if (!client) throw new Error('client not found.');
@@ -187,6 +206,7 @@ class BinanceController {
 
       res.json(result);
     } catch (error: any) {
+      logger.error('Error getting Binance trade history', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -201,6 +221,8 @@ class BinanceController {
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
+      logger.info(`Getting current position for ${symbol} on account ${trade_account_id}`);
+      
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       if (!client) throw new Error('client not found.');
@@ -209,6 +231,7 @@ class BinanceController {
 
       res.status(200).json(result);
     } catch (error: any) {
+      logger.error('Error getting Binance current position', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -219,6 +242,8 @@ class BinanceController {
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
+      logger.info(`Getting open orders for account ${trade_account_id}`);
+      
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       if (!client) throw new Error('client not found.');
@@ -227,6 +252,7 @@ class BinanceController {
 
       res.status(200).json(result);
     } catch (error: any) {
+      logger.error('Error getting Binance open orders', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -240,6 +266,8 @@ class BinanceController {
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
+      logger.info(`Getting snapshots for account ${trade_account_id} from ${startTime} to ${endTime}`);
+      
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       if (!client) throw new Error('client not found.');
@@ -248,6 +276,7 @@ class BinanceController {
 
       res.status(200).json(result);
     } catch (error: any) {
+      logger.error('Error getting Binance snapshots', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }

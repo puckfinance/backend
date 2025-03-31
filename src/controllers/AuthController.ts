@@ -10,6 +10,7 @@ import { JwtService } from '../services/jwt';
 import { JWTPayload } from '../interfaces';
 import * as jwt from 'jsonwebtoken';
 import { UserLoginDTO, UserSignupDTO } from '../interfaces/User';
+import logger from '../utils/Logger';
 /**
  * BindingType controller
  *
@@ -77,7 +78,7 @@ export class AuthController {
         token,
       });
     } catch (error) {
-      console.error('Signup error:', error);
+      logger.error('Signup error:', error);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -117,7 +118,7 @@ export class AuthController {
         token,
       });
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -136,7 +137,7 @@ export class AuthController {
         user: userWithoutPassword,
       });
     } catch (error) {
-      console.error('Me error:', error);
+      logger.error('Me error:', error);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }

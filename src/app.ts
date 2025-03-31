@@ -7,6 +7,7 @@ import Routes from './routes';
 import { ErrorResponse } from './middlewares';
 import * as NodeCache from 'node-cache'
 import PassportConfig from './middlewares/Passport';
+import logger from './utils/Logger';
 
 // Load environment variables early
 dotenv.config();
@@ -14,7 +15,7 @@ dotenv.config();
 export const cache = new NodeCache();
 
 export const run = async () => {
-  console.info(`NODE_ENV: ${process.env.NODE_ENV}`);
+  logger.info(`NODE_ENV: ${process.env.NODE_ENV}`);
   PassportConfig();
   const app = express();
 

@@ -17,6 +17,15 @@ FROM node:18-alpine
 
 COPY --from=builder /app/built ./built
 COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 80
 
-CMD ["node", "./built/server.js"]
+# Set production environment
+ENV NODE_ENV=production
+# Configure logger to ensure logs appear in Docker
+ENV LOG_LEVEL=info
+
+# Ensure container runs with PID 1 to properly handle signals
+ENTRYPOINT ["node"]
+CMD ["./built/server.js"]
+
+# Expose the application port
+EXPOSE 80

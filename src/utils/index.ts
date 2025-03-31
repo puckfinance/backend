@@ -1,4 +1,5 @@
 import axios, { AxiosRequestConfig } from 'axios';
+import logger from './Logger';
 
 const isExpired: (expireDate?: Date) => boolean = (expireDate) => {
   /* if expire date is null or undefined it's not expired */
@@ -23,11 +24,16 @@ const sendRequest = async ({ url, method, headers, ...props }: AxiosRequestConfi
     const { status, data } = await axios(props);
     return { status, data };
   } catch (error) {
+    logger.error('API request failed', error);
     return { status: 401, data: null };
   }
 };
+
+export { logger };
+
 export default {
   isExpired,
   youtubeUrlToEmbed,
   sendRequest,
+  logger,
 };

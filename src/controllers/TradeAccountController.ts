@@ -4,6 +4,7 @@ import { User, Provider } from '@prisma/client';
 import prisma from '../infrastructure/prisma';
 import { CryptoService } from '../services/crypto';
 import { z } from 'zod';
+import logger from '../utils/Logger';
 
 const createTradeAccountSchema = z.object({
   apiKey: z.string(),
@@ -24,6 +25,7 @@ class TradeAccountController {
     try {
       const userId = (req.user as User).id;
       
+      logger.info(`Getting all trade accounts for user ${userId}`);
       const accounts = await prisma.tradeAccount.findMany({
         where: { userId },
       });
@@ -31,6 +33,7 @@ class TradeAccountController {
       // Return accounts with encrypted keys
       res.json(accounts);
     } catch (error: any) {
+      logger.error('Failed to get trade accounts', error);
       res.status(500).json({ message: error?.message || 'Failed to get trade accounts' });
     }
   }
@@ -43,6 +46,7 @@ class TradeAccountController {
       const userId = (req.user as User).id;
       const accountId = req.params.id;
       
+      logger.info(`Getting trade account ${accountId} for user ${userId}`);
       const account = await prisma.tradeAccount.findFirst({
         where: { 
           id: accountId,
@@ -51,12 +55,14 @@ class TradeAccountController {
       });
       
       if (!account) {
+        logger.warn(`Trade account ${accountId} not found for user ${userId}`);
         return res.status(404).json({ message: 'Trade account not found' });
       }
       
       // Return account with encrypted keys
       res.json(account);
     } catch (error: any) {
+      logger.error(`Failed to get trade account ${req.params.id}`, error);
       res.status(500).json({ message: error?.message || 'Failed to get trade account' });
     }
   }
@@ -70,6 +76,8 @@ class TradeAccountController {
       
       // Validate request body
       const { apiKey, secretKey, name, provider } = createTradeAccountSchema.parse(req.body);
+      
+      logger.info(`Creating new ${provider} trade account for user ${userId}`);
       
       // Encrypt sensitive data
       const encryptedApiKey = CryptoService.encrypt(apiKey);
@@ -95,8 +103,10 @@ class TradeAccountController {
       res.status(201).json(responseAccount);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
+        logger.warn('Invalid trade account data', { errors: error.errors });
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
       }
+      logger.error('Failed to create trade account', error);
       res.status(500).json({ message: error?.message || 'Failed to create trade account' });
     }
   }
@@ -112,6 +122,8 @@ class TradeAccountController {
       // Validate request body
       const { name } = updateTradeAccountSchema.parse(req.body);
       
+      logger.info(`Updating trade account ${accountId} for user ${userId}`);
+      
       // Check if account exists and belongs to user
       const existingAccount = await prisma.tradeAccount.findFirst({
         where: { 
@@ -121,6 +133,7 @@ class TradeAccountController {
       });
       
       if (!existingAccount) {
+        logger.warn(`Trade account ${accountId} not found for user ${userId}`);
         return res.status(404).json({ message: 'Trade account not found' });
       }
       
@@ -140,8 +153,10 @@ class TradeAccountController {
       res.json(responseAccount);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
+        logger.warn('Invalid trade account update data', { errors: error.errors });
         return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
       }
+      logger.error(`Failed to update trade account ${req.params.id}`, error);
       res.status(500).json({ message: error?.message || 'Failed to update trade account' });
     }
   }
@@ -154,6 +169,8 @@ class TradeAccountController {
       const userId = (req.user as User).id;
       const accountId = req.params.id;
       
+      logger.info(`Deleting trade account ${accountId} for user ${userId}`);
+      
       // Check if account exists and belongs to user
       const existingAccount = await prisma.tradeAccount.findFirst({
         where: { 
@@ -163,6 +180,7 @@ class TradeAccountController {
       });
       
       if (!existingAccount) {
+        logger.warn(`Trade account ${accountId} not found for user ${userId}`);
         return res.status(404).json({ message: 'Trade account not found' });
       }
       
@@ -173,6 +191,7 @@ class TradeAccountController {
       
       res.status(204).send();
     } catch (error: any) {
+      logger.error(`Failed to delete trade account ${req.params.id}`, error);
       res.status(500).json({ message: error?.message || 'Failed to delete trade account' });
     }
   }

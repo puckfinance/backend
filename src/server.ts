@@ -5,6 +5,7 @@ import { SystemDefaults } from './constants';
 import * as dotenv from 'dotenv';
 import { run } from './app';
 import { connectPrisma, disconnectPrisma } from './infrastructure/prisma';
+import logger from './utils/Logger';
 
 dotenv.config();
 
@@ -44,7 +45,7 @@ class MainServer {
       // Handle graceful shutdown
       this.setupGracefulShutdown();
     } catch (error) {
-      console.error('Server initialization failed:', error);
+      logger.error('Server initialization failed:', error);
       process.exit(1);
     }
   }
@@ -55,26 +56,26 @@ class MainServer {
   private setupGracefulShutdown() {
     // Handle application termination
     process.on('SIGINT', async () => {
-      console.log('SIGINT received. Shutting down gracefully...');
+      logger.info('SIGINT received. Shutting down gracefully...');
       await this.shutdown();
       process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
-      console.log('SIGTERM received. Shutting down gracefully...');
+      logger.info('SIGTERM received. Shutting down gracefully...');
       await this.shutdown();
       process.exit(0);
     });
 
     // Handle uncaught exceptions
     process.on('uncaughtException', async (error) => {
-      console.error('Uncaught Exception:', error);
+      logger.error('Uncaught Exception:', error);
       await this.shutdown();
       process.exit(1);
     });
 
     process.on('unhandledRejection', async (reason, promise) => {
-      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      logger.error('Unhandled Rejection at:', { promise, reason });
     });
   }
 
@@ -82,7 +83,7 @@ class MainServer {
    * Clean shutdown of server and database connections
    */
   private async shutdown() {
-    console.log('Shutting down server...');
+    logger.info('Shutting down server...');
     if (this.server) {
       this.server.close();
     }
@@ -99,7 +100,7 @@ class MainServer {
     if (!this.server) return;
 
     this.server.listen(this.port, () => {
-      console.log('*** Listening on port: %s ***', this.port);
+      logger.info(`*** Listening on port: ${this.port} ***`);
     });
   }
 
