@@ -351,10 +351,16 @@ const getCurrentBalance = async (client: BinanceType) => {
   return balance;
 };
 
-const getTradeHistory = async (client: BinanceType, symbol: string, limit: number) => {
+const getTradeHistory = async (client: BinanceType, symbol: string, limit: number, startTime?: number, endTime?: number) => {
+  // default last 3 months
+  if (!startTime) startTime = moment().subtract(3, 'month').unix() * 1000;
+  if (!endTime) endTime = moment().unix() * 1000;
+
   const trade = await client.futuresUserTrades({
     symbol,
     limit,
+    ...(startTime && { startTime }),
+    ...(endTime && { endTime }),
   });
 
   return trade.flatMap((each) => {
@@ -364,10 +370,16 @@ const getTradeHistory = async (client: BinanceType, symbol: string, limit: numbe
   });
 };
 
-const getIncome = async (client: BinanceType) => {
+const getIncome = async (client: BinanceType, startTime?: number, endTime?: number) => {
+  // default last 3 months
+  if (!startTime) startTime = moment().subtract(3, 'month').unix() * 1000;
+  if (!endTime) endTime = moment().unix() * 1000;
+
   const result = await client.futuresIncome({
     incomeType: 'REALIZED_PNL',
     limit: 1000,
+    ...(startTime && { startTime }),
+    ...(endTime && { endTime }),
   });
 
   return result;
