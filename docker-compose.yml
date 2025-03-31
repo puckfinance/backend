@@ -9,4 +9,4 @@ services:
       - .env
     ports:
       - 80:8083
-    image: nyamkamunhjin/binance-bot-v2
+    image: nyamkamunhjin/binance-bot-v3
