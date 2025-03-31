@@ -1,9 +1,9 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY package.json pnpm-lock.yaml* ./
-RUN apk add --no-cache libc6-compat && \
+RUN apk add --no-cache libc6-compat python3 make g++ && \
     npm install -g pnpm && \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --no-optional
 
 COPY . .
 
