@@ -94,12 +94,15 @@ export class AuthController {
         where: { email },
       });
 
+      logger.info(`User:`, user as any);
+
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
       // Check password
       const isPasswordValid = await bcrypt.compare(password, user.password);
+      logger.info(`isPasswordValid: ${isPasswordValid}`);
       if (!isPasswordValid) {
         return res.status(401).json({ message: 'Invalid password' });
       }
@@ -107,9 +110,10 @@ export class AuthController {
       // Generate JWT token
       const token = jwt.sign(
         { id: user.id, email: user.email },
-        process.env.JWT_SECRET!,
+        `${process.env.JWT_SECRET}`,
         { expiresIn: '24h' }
       );
+      logger.info(`Token: ${token}`);
 
       // Remove password from response
       const { password: _, ...userWithoutPassword } = user;
