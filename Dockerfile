@@ -1,20 +1,18 @@
 FROM node:18 AS builder
 WORKDIR /app
-COPY package.json pnpm-lock.yaml* ./
-RUN apk add --no-cache libc6-compat python3 make g++ && \
-    npm install -g pnpm && \
-    pnpm install --frozen-lockfile --no-optional
+COPY package.json ./
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN pnpm prisma:generate && \
-    pnpm build && \
-    pnpm prune --prod && \
-    rm -rf src tests .git .github .next/cache
+RUN pnpm prisma:generate
+RUN pnpm build
+
+RUN pnpm prune --prod
 
 FROM node:18-alpine
 
-WORKDIR /app
 COPY --from=builder /app/built ./built
 COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 80
