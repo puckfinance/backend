@@ -1,5 +1,5 @@
 {
-  "name": "srve-backend",
+  "name": "puckfinance-backend",
   "version": "1.0.0",
   "main": "index.js",
   "description": "nodejs + typescript",

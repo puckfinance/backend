@@ -9,6 +9,8 @@ COPY . .
 RUN pnpm prisma:generate
 RUN pnpm build
 
+# Set CI=true to skip husky installation in Docker
+ENV CI=true
 RUN pnpm prune --prod
 
 FROM node:18-alpine
