@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:18 AS builder
 WORKDIR /app
 COPY package.json pnpm-lock.yaml* ./
 RUN apk add --no-cache libc6-compat python3 make g++ && \
