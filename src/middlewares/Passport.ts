@@ -1,9 +1,10 @@
-import bcrypt from 'bcrypt';
 import passport from 'passport';
 import { ExtractJwt, Strategy as JWTStrategy } from 'passport-jwt';
 import { Strategy as LocalStrategy } from 'passport-local';
 import prisma from '../infrastructure/prisma';
 import { JWTPayload } from '../interfaces';
+import { PasswordHashService } from '../services/passwordHash';
+
 const userNotFoundMessage = { message: 'user not found.' };
 const errorMessage = { message: 'something went wrong.' };
 const passwordNoMatchMessage = { message: 'password does not match.' };
@@ -23,7 +24,7 @@ export default () => {
         if (!user) {
           return done(userNotFoundMessage, false, userNotFoundMessage);
         } else {
-          const doesPasswordMatch = await bcrypt.compare(password, user.password);
+          const doesPasswordMatch = await PasswordHashService.verify(password, user.password);
           if (!doesPasswordMatch) {
             return done(passwordNoMatchMessage, false, passwordNoMatchMessage);
           }

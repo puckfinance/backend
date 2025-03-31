@@ -1,7 +1,6 @@
 import { User } from '@prisma/client';
 import passport from 'passport';
 
-import bcrypt from 'bcrypt';
 import { NextFunction, Request, Response, Router } from 'express';
 import { PasswordSaltRound } from '../constants';
 import HttpException from '../utils/HttpException';
@@ -11,6 +10,7 @@ import { JWTPayload } from '../interfaces';
 import jwt from 'jsonwebtoken';
 import { UserLoginDTO, UserSignupDTO } from '../interfaces/User';
 import logger from '../utils/Logger';
+import { PasswordHashService } from '../services/passwordHash';
 /**
  * BindingType controller
  *
@@ -50,9 +50,8 @@ export class AuthController {
         return res.status(400).json({ message: 'User already exists' });
       }
 
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+      // Hash password with crypto instead of bcrypt
+      const hashedPassword = await PasswordHashService.hash(password);
 
       // Create new user
       const user = await prisma.user.create({
@@ -86,23 +85,20 @@ export class AuthController {
   public static async login(req: Request<{}, {}, UserLoginDTO>, res: Response) {
     try {
       const { email, password } = req.body;
-      logger.info('Login request received:', { email, password });
-      logger.info(`JWT_SECRET: ${process.env.JWT_SECRET}`);
+      logger.info('Login request received:', { email });
 
       // Find user
       const user = await prisma.user.findUnique({
         where: { email },
       });
 
-      logger.info(`User:`, user as any);
-
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Check password
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      logger.info(`isPasswordValid: ${isPasswordValid}`);
+      // Check password with crypto instead of bcrypt
+      const isPasswordValid = await PasswordHashService.verify(password, user.password);
+      
       if (!isPasswordValid) {
         return res.status(401).json({ message: 'Invalid password' });
       }
@@ -113,7 +109,6 @@ export class AuthController {
         `${process.env.JWT_SECRET}`,
         { expiresIn: '24h' }
       );
-      logger.info(`Token: ${token}`);
 
       // Remove password from response
       const { password: _, ...userWithoutPassword } = user;
@@ -180,7 +175,8 @@ export class AuthController {
     if (req.body.password.trim() === '' || req.body.password !== req.body.confirm_password)
       throw new HttpException(400, `passwords doesn't match.`);
 
-    const hashedPassword = await bcrypt.hash(req.body.password, PasswordSaltRound);
+    // Hash password with crypto instead of bcrypt
+    const hashedPassword = await PasswordHashService.hash(req.body.password);
 
     const updatedUser = await prisma.user.update({
       where: {
