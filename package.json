@@ -24,7 +24,7 @@
     "db:deploy": "dotenv -e .env -- prisma migrate deploy",
     "build": "tsc",
     "clean": "rm -rf built node_modules yarn.lock package.lock.json",
-    "prepare": "is-ci || husky install"
+    "prepare": "is-ci || husky install || true"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
