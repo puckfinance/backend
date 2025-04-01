@@ -75,18 +75,19 @@ class TradeAccountController {
       const userId = (req.user as User).id;
       
       // Validate request body
-      const { apiKey, secretKey, name, provider } = createTradeAccountSchema.parse(req.body);
+      const { apiKey, secretKey, secret, name, provider } = createTradeAccountSchema.parse(req.body);
       
       logger.info(`Creating new ${provider} trade account for user ${userId}`);
       
       // Encrypt sensitive data
       const encryptedApiKey = CryptoService.encrypt(apiKey);
       const encryptedSecretKey = CryptoService.encrypt(secretKey);
-      
+      const encryptedSecret = CryptoService.encrypt(secret);
       const account = await prisma.tradeAccount.create({
         data: {
           apiKey: encryptedApiKey,
           secretKey: encryptedSecretKey,
+          secret: encryptedSecret,
           userId,
           name,
           provider,
