@@ -10,6 +10,7 @@ const createTradeAccountSchema = z.object({
   apiKey: z.string(),
   secretKey: z.string(),
   name: z.string(),
+  secret: z.string(),
   provider: z.nativeEnum(Provider),
 });
 
