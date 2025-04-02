@@ -165,6 +165,27 @@ class BinanceController {
     }
   }
 
+  public async balanceV3(req: Request, res: Response, _next: NextFunction) {
+    try {
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      logger.info(`Getting balance for account ${trade_account_id}`);
+      
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.getCurrentBalanceV3(client);
+
+      res.status(200).json(result);
+    } catch (error: any) {
+      logger.error('Error getting Binance balance', error);
+      res.status(500).json({ error: error?.message || '' });
+    }
+  }
+
   public async income(req: Request, res: Response, _next: NextFunction) {
     try {
       const trade_account_id = req.params.trade_account_id;
@@ -236,6 +257,8 @@ class BinanceController {
     }
   }
 
+  
+
   public async openOrders(req: Request, res: Response, _next: NextFunction) {
     try {
       const trade_account_id = req.params.trade_account_id;
@@ -292,6 +315,7 @@ export default () => {
   router.get('/current-position/:trade_account_id', controller.currentPosition);
   router.get('/open-orders/:trade_account_id', controller.openOrders);
   router.get('/balance/:trade_account_id', controller.balance);
+  router.get('/balance-v3/:trade_account_id', controller.balanceV3);
   router.get('/income/:trade_account_id', controller.income);
   router.get('/snapshot/:trade_account_id', controller.getSnapshots);
 

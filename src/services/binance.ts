@@ -351,6 +351,11 @@ const getCurrentBalance = async (client: BinanceType) => {
   return balance;
 };
 
+const getCurrentBalanceV3 = async (client: BinanceType) => {
+  const balances = await client.futuresAccountBalance();
+  return balances;
+};
+
 const getTradeHistory = async (client: BinanceType, symbol: string, limit: number, startTime?: number, endTime?: number) => {
   // default last 3 months
   if (!startTime) startTime = moment().subtract(3, 'month').unix() * 1000;
@@ -519,6 +524,7 @@ const BinanceFunctions = {
   getIncome,
   getSnapshot,
   loadBinanceClient,
+  getCurrentBalanceV3,
 };
 
 export default BinanceFunctions;
