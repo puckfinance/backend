@@ -49,7 +49,7 @@ const checkConnection = (client: BinanceType) => {
 const currentPositions = async (client: BinanceType, symbol: string) => {
   const accountInfo = await client.futuresAccountInfo();
 
-  const positions = accountInfo.positions.filter((item) => parseFloat(item.entryPrice) > 0 && item.symbol === symbol);
+  const positions = accountInfo.positions.filter((item) => parseFloat(item.entryPrice) > 0);
   return positions;
 };
 
