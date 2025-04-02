@@ -234,21 +234,19 @@ class BinanceController {
 
   public async currentPosition(req: Request, res: Response, _next: NextFunction) {
     try {
-      const symbol = req.query.symbol as string;
 
-      if (!symbol) throw new Error('symbol is empty.');
 
       const trade_account_id = req.params.trade_account_id;
 
       if (!trade_account_id) throw new Error('trade_account_id is empty.');
 
-      logger.info(`Getting current position for ${symbol} on account ${trade_account_id}`);
+      logger.info(`Getting current positions on account ${trade_account_id}`);
       
       const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
 
       if (!client) throw new Error('client not found.');
 
-      const result = await BinanceFunctions.currentPositions(client, symbol);
+      const result = await BinanceFunctions.currentPositions(client);
 
       res.status(200).json(result);
     } catch (error: any) {

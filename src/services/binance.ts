@@ -46,7 +46,7 @@ const checkConnection = (client: BinanceType) => {
   return client.ping();
 };
 
-const currentPositions = async (client: BinanceType, symbol: string) => {
+const currentPositions = async (client: BinanceType) => {
   const accountInfo = await client.futuresAccountInfo();
 
   const positions = accountInfo.positions.filter((item) => parseFloat(item.entryPrice) > 0);
