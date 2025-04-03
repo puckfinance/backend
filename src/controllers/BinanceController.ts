@@ -5,7 +5,7 @@ import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
-import { NewFuturesOrder } from 'binance-api-node';
+import { FuturesAccountPosition, NewFuturesOrder } from 'binance-api-node';
 import logger from '../utils/Logger';
 
 class BinanceController {
@@ -246,9 +246,41 @@ class BinanceController {
 
       if (!client) throw new Error('client not found.');
 
-      const result = await BinanceFunctions.currentPositions(client);
+      const positions = await BinanceFunctions.currentPositions(client);
 
-      res.status(200).json(result);
+      const openOrders = await BinanceFunctions.getOpenOrders(client);
+
+      // calculate stoploss and takeprofit amount for each position
+
+      type ExtendedPosition = FuturesAccountPosition & { stoploss: string; takeprofit: string; stoplossAmount: number; takeprofitAmount: number };
+
+
+      const extendedPositions: ExtendedPosition[] = positions.map((position) => {
+
+        const stoploss = openOrders.find((order) => order.symbol === position.symbol && order.type === 'STOP_MARKET')?.stopPrice || '';
+        const takeprofit = openOrders.find((order) => order.symbol === position.symbol && order.type === 'TAKE_PROFIT_MARKET')?.stopPrice || '';
+
+        const size = parseFloat(position.positionAmt)
+
+        const stoplossAmount = stoploss ? (parseFloat(position.entryPrice) * size) - (parseFloat(stoploss) * size) : 0;
+        const takeprofitAmount = takeprofit ? (parseFloat(position.entryPrice) * size) - (parseFloat(takeprofit) * size) : 0;
+
+
+        const extendedPosition: ExtendedPosition = {
+          ...position,
+          stoploss,
+          takeprofit,
+          stoplossAmount,
+          takeprofitAmount,
+        };
+
+        return extendedPosition;
+      });
+
+
+
+      res.status(200).json({ positions: extendedPositions, openOrders });
+
     } catch (error: any) {
       logger.error('Error getting Binance current position', error);
       res.status(500).json({ error: error?.message || '' });
