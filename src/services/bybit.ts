@@ -85,6 +85,13 @@ const entry = async ({
 
   console.log({ riskAmount, qty });
 
+  // set leverage
+  await bybitClient.setLeverage({
+    category: 'linear',
+    symbol,
+    buyLeverage: '20',
+    sellLeverage: '20',
+  });
   // entry
   const executedEntryOrder = await bybitClient.submitOrder({
     category: 'linear',
