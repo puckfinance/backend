@@ -5,7 +5,7 @@ import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
-import { FuturesAccountPosition, NewFuturesOrder } from 'binance-api-node';
+import { FuturesAccountPosition } from 'binance-api-node';
 import logger from '../utils/Logger';
 
 class BinanceController {
