@@ -120,22 +120,24 @@ class BinanceController {
             await client.futuresCancelAllOpenOrders({
               symbol,
             });
-          } else {
-            logger.info(`Exiting position for ${symbol}, current position: ${positions[0].positionAmt}`);
-
-            const closeOrder: NewFuturesOrder = {
-              symbol: symbol,
-              type: 'MARKET',
-              side: side === 'BUY' ? 'SELL' : 'BUY',
-              quantity: `${positions[0].positionAmt}`,
-            };
-
-            await client.futuresCancelAllOpenOrders({
-              symbol,
-            });
-
-            await client.futuresOrder(closeOrder);
           }
+          //  else {
+          //   logger.info(`Exiting position for ${symbol}, current position: ${positions[0].positionAmt}`);
+
+          //   const closeOrder: NewFuturesOrder = {
+          //     symbol: symbol,
+          //     type: 'MARKET',
+          //     side: side === 'BUY' ? 'SELL' : 'BUY',
+          //     quantity: `${positions[0].positionAmt}`,
+          //   };
+
+          //   await client.futuresCancelAllOpenOrders({
+          //     symbol,
+          //   });
+
+
+          //   await client.futuresOrder(closeOrder);
+          // }
 
           return res.status(200).json({ result: 'Cancelling all open orders' });
         }
