@@ -363,7 +363,7 @@ const getCurrentBalanceV3 = async (client: BinanceType) => {
 
 const getTradeHistory = async (client: BinanceType, symbol: string, limit: number, startTime?: number, endTime?: number) => {
   // default last 3 months
-  if (!startTime) startTime = moment().subtract(3, 'month').unix() * 1000;
+  if (!startTime) startTime = moment().subtract(7, 'day').unix() * 1000;
   if (!endTime) endTime = moment().unix() * 1000;
 
   const trade = await client.futuresUserTrades({
