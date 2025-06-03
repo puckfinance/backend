@@ -5,7 +5,7 @@ import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
-import { FuturesAccountPosition } from 'binance-api-node';
+import { FuturesAccountPosition, NewFuturesOrder } from 'binance-api-node';
 import logger from '../utils/Logger';
 
 class BinanceController {
@@ -115,31 +115,46 @@ class BinanceController {
         }
 
         case 'EXIT': {
-          if (positions.length === 0) {
-            logger.info(`Cancelling all open orders for ${symbol}`);
-            await client.futuresCancelAllOpenOrders({
-              symbol,
-            });
+          // Cancel all open orders first
+          logger.info(`Cancelling all open orders for ${symbol}`);
+          await client.futuresCancelAllOpenOrders({
+            symbol,
+          });
+
+          // Fetch fresh position data to avoid race condition
+          const currentPositions = await BinanceFunctions.currentPositions(client, symbol);
+          
+          if (currentPositions.length === 0) {
+            logger.info(`No open position found for ${symbol} after cancelling orders`);
+          } else {
+            const currentPosition = currentPositions[0];
+            const positionAmt = parseFloat(currentPosition.positionAmt);
+            
+            logger.info(`Current position for ${symbol}: ${positionAmt}, original side: ${side}`);
+            
+            // Only close position if it matches the expected side from the original trade
+            // This prevents closing opposite positions that might have been created by stop losses
+            const isLongPosition = positionAmt > 0;
+            const originalSideWasLong = side === 'BUY';
+            
+            if (Math.abs(positionAmt) > 0 && isLongPosition === originalSideWasLong) {
+              const closeOrder: NewFuturesOrder = {
+                symbol: symbol,
+                type: 'MARKET',
+                side: positionAmt > 0 ? 'SELL' : 'BUY',
+                quantity: `${Math.abs(positionAmt)}`,
+              };
+
+              await client.futuresOrder(closeOrder);
+              logger.info(`Close order placed for ${symbol}: ${closeOrder.side} ${closeOrder.quantity}`);
+            } else if (Math.abs(positionAmt) > 0) {
+              logger.warn(`Position side mismatch for ${symbol}. Current: ${isLongPosition ? 'LONG' : 'SHORT'}, Expected: ${originalSideWasLong ? 'LONG' : 'SHORT'}. Skipping position close to avoid race condition.`);
+            } else {
+              logger.info(`Position amount is zero for ${symbol}, no close order needed`);
+            }
           }
-          //  else {
-          //   logger.info(`Exiting position for ${symbol}, current position: ${positions[0].positionAmt}`);
 
-          //   const closeOrder: NewFuturesOrder = {
-          //     symbol: symbol,
-          //     type: 'MARKET',
-          //     side: side === 'BUY' ? 'SELL' : 'BUY',
-          //     quantity: `${positions[0].positionAmt}`,
-          //   };
-
-          //   await client.futuresCancelAllOpenOrders({
-          //     symbol,
-          //   });
-
-
-          //   await client.futuresOrder(closeOrder);
-          // }
-
-          return res.status(200).json({ result: 'Cancelling all open orders' });
+          return res.status(200).json({ result: 'Orders cancelled and position checked for safe exit' });
         }
       }
 
