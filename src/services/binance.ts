@@ -1,4 +1,4 @@
-import Binance, { Binance as BinanceType, FuturesIncomeResult, NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
+import Binance, { Binance as BinanceType, NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
 
 import moment from 'moment';
 import { cache } from '../app';
@@ -381,43 +381,20 @@ const getTradeHistory = async (client: BinanceType, symbol: string, limit: numbe
 };
 
 const getIncome = async (client: BinanceType, startTime?: number, endTime?: number) => {
-  // If no time range specified, default to last 5 years
-  if (!startTime) startTime = moment().subtract(5, 'years').unix() * 1000;
+  // default last 3 months
+  if (!startTime) startTime = moment().subtract(3, 'month').unix() * 1000;
   if (!endTime) endTime = moment().unix() * 1000;
 
-  const allResults: FuturesIncomeResult[] = [];
   
-  // Break down into monthly chunks to avoid API limits
-  let currentStart = startTime;
-  const monthlyChunkSize = moment.duration(3, 'month').asMilliseconds();
-  
-  while (currentStart < endTime) {
-    const currentEnd = Math.min(currentStart + monthlyChunkSize, endTime);
-    
-    try {
-      const result = await client.futuresIncome({
-        incomeType: 'REALIZED_PNL',
-        limit: 1000,
-        startTime: currentStart,
-        endTime: currentEnd,
-      });
-      
-      allResults.push(...result);
-      
-      // Move to next month
-      currentStart = currentEnd;
-      
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-    } catch (error) {
-      logger.error(`Error fetching income data for period ${new Date(currentStart)} to ${new Date(currentEnd)}:`, error);
-      // Continue with next chunk even if one fails
-      currentStart = currentEnd;
-    }
-  }
 
-  return allResults;
+  const result = await client.futuresIncome({
+    incomeType: 'REALIZED_PNL',
+    limit: 1000,
+    ...(startTime && { startTime }),
+    ...(endTime && { endTime }),
+  });
+
+  return result;
 };
 
 const getOpenOrders = async (client: BinanceType) => {
