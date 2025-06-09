@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { run } from './app';
 import { connectPrisma, disconnectPrisma } from './infrastructure/prisma';
 import logger from './utils/Logger';
+import { initializeWebSocket } from './controllers/webSocket.controller';
 
 dotenv.config();
 
@@ -40,6 +41,9 @@ class MainServer {
       // Initialize Express app
       this._app = await run();
       this.server = createServer(this._app);
+
+      initializeWebSocket(this.server);
+
       this.listen();
       
       // Handle graceful shutdown

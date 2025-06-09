@@ -1,4 +1,9 @@
-import Binance, { Binance as BinanceType, NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
+import Binance, {
+  Binance as BinanceType,
+  FuturesIncomeType,
+  NewFuturesOrder,
+  OrderSide_LT,
+} from 'binance-api-node';
 
 import moment from 'moment';
 import { cache } from '../app';
@@ -380,18 +385,25 @@ const getTradeHistory = async (client: BinanceType, symbol: string, limit: numbe
   });
 };
 
-const getIncome = async (client: BinanceType, startTime?: number, endTime?: number) => {
+const getIncome = async (
+  client: BinanceType,
+  options?: {
+    symbol?: string;
+    incomeType?: FuturesIncomeType;
+    startTime?: number;
+    endTime?: number;
+    limit?: number;
+  },
+) => {
   // default last 3 months
-  if (!startTime) startTime = moment().subtract(3, 'month').unix() * 1000;
-  if (!endTime) endTime = moment().unix() * 1000;
-
-  
+  const startTime = options?.startTime || moment().subtract(3, 'month').unix() * 1000;
+  const endTime = options?.endTime || moment().unix() * 1000;
 
   const result = await client.futuresIncome({
-    incomeType: 'REALIZED_PNL',
-    limit: 1000,
-    ...(startTime && { startTime }),
-    ...(endTime && { endTime }),
+    ...options,
+    startTime,
+    endTime,
+    limit: options?.limit || 1000,
   });
 
   return result;

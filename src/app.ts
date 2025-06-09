@@ -4,6 +4,7 @@ import morgan from 'morgan';
 import passport from 'passport';
 import dotenv from 'dotenv';
 import Routes from './routes';
+import webSocketRoutes from './routes/webSocket.routes';
 import { ErrorResponse } from './middlewares';
 import NodeCache from 'node-cache';
 import PassportConfig from './middlewares/Passport';
@@ -123,6 +124,7 @@ export const run = async () => {
     next(new HttpException(408, 'Request timeout'));
   });
   
+  app.use(webSocketRoutes);
   app.use('/api/v1', Routes());
   
   // 404 handler
