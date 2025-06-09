@@ -24,7 +24,7 @@ class BinanceWebSocketService {
     console.log('Connecting to Binance WebSocket');
 
     // Listen for account updates
-    await this.binanceClient.ws.user((update) => {
+    await this.binanceClient.ws.futuresUser((update) => {
       console.log('Received account update:', update);
       if (this.ws && this.ws.readyState === this.ws.OPEN) {
         this.ws.send(JSON.stringify(update));
