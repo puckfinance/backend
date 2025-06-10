@@ -5,7 +5,7 @@ import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
-import { FuturesAccountPosition, NewFuturesOrder } from 'binance-api-node';
+import { FuturesAccountPosition, FuturesIncomeType, NewFuturesOrder } from 'binance-api-node';
 import logger from '../utils/Logger';
 
 class BinanceController {
@@ -219,7 +219,9 @@ class BinanceController {
 
       if (!client) throw new Error('client not found.');
 
-      const result = await BinanceFunctions.getIncome(client);
+      const result = await BinanceFunctions.getIncome(client, {
+        incomeType: FuturesIncomeType.REALIZED_PNL,
+      });
 
       res.json(result);
     } catch (error: any) {
