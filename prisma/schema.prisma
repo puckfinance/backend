@@ -20,6 +20,7 @@ model User {
   TradeLog  TradeLog[]
 
   TradeAccount TradeAccount[]
+  Strategy     Strategy[]
 }
 
 model TradeLog {
@@ -40,18 +41,33 @@ model TradeLog {
 }
 
 model TradeAccount {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  apiKey    String
-  secretKey String
-  secret    String   @default("")
-  provider  Provider
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
+  id         String    @id @default(uuid())
+  name       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  apiKey     String
+  secretKey  String
+  secret     String    @default("")
+  provider   Provider
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  Strategy   Strategy? @relation(fields: [strategyId], references: [id])
+  strategyId String?
 
   @@unique([apiKey, secretKey])
+}
+
+model Strategy {
+  id                   String         @id @default(uuid())
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  name                 String
+  description          String
+  owner                User           @relation(fields: [ownerId], references: [id])
+  ownerId              String
+  fileUrl              String?
+  averageMonthlyReturn Float?
+  tradeAccount         TradeAccount[]
 }
 
 enum TradeSide {

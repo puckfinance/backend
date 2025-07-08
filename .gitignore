@@ -14,3 +14,6 @@ dist
 # environment configs
 .env
 .env.local
+
+# uploads
+uploads/
