@@ -219,22 +219,22 @@ const entryOptimized = async ({
 
   if (partialProfits) {
     partialProfits.forEach((item) => {
-      const price = entryPrice + ((side === 'BUY' ? takeProfitPrice : -takeProfitPrice) - entryPrice) * item.where;
-      
-      let qty = convertToPrecision(currentQty * item.qty, quantityPrecision);
-      
-      if (item.where === 1) {
-        qty = convertToPrecision(origQty - previousQtys.reduce((acc, cur) => acc + cur, 0), quantityPrecision);
-      } else {
-        previousQtys.push(qty);
-      }
+    const price = entryPrice + ((side === 'BUY' ? takeProfitPrice : -takeProfitPrice) - entryPrice) * item.where;
+
+    let qty = convertToPrecision(currentQty * item.qty, quantityPrecision);
+
+    if (item.where === 1) {
+      qty = convertToPrecision(origQty - previousQtys.reduce((acc, cur) => acc + cur, 0), quantityPrecision);
+    } else {
+      previousQtys.push(qty);
+    }
 
       partialProfitOrders.push({
-        symbol: symbol,
-        price: convertToPrecision(price, tickSize) as any,
-        type: 'LIMIT',
-        side: side === 'BUY' ? 'SELL' : 'BUY',
-        quantity: `${qty}`,
+      symbol: symbol,
+      price: convertToPrecision(price, tickSize) as any,
+      type: 'LIMIT',
+      side: side === 'BUY' ? 'SELL' : 'BUY',
+      quantity: `${qty}`,
         timeInForce: 'GTC',
       });
     });
@@ -279,7 +279,7 @@ const entryOptimized = async ({
       quantity: `${qty}`,
     };
     await client.futuresOrder(closeOrder);
-  }
+    }
 
   return {
     success: true,
@@ -464,15 +464,33 @@ const getIncome = async (
   },
 ) => {
   // default last 3 months
-  const startTime = options?.startTime || moment().subtract(3, 'month').unix() * 1000;
-  const endTime = options?.endTime || moment().unix() * 1000;
+  const startTime = options?.startTime || moment().endOf('day').subtract(3, 'month').unix() * 1000;
+  const endTime = options?.endTime || moment().endOf('day').unix() * 1000;
+  const limit = options?.limit || 1000;
+
+  // Create cache key based on all parameters that affect the result
+  const cacheKey = [
+    'income',
+    options?.symbol || 'all',
+    options?.incomeType || 'all',
+    startTime,
+    endTime,
+    limit,
+  ].join('-');
+
+  // Check cache first
+  const cachedData = cache.get(cacheKey);
+  if (cachedData) return cachedData;
 
   const result = await client.futuresIncome({
     ...options,
     startTime,
     endTime,
-    limit: options?.limit || 1000,
+    limit,
   });
+
+  // Cache for 5 minutes (300 seconds)
+  cache.set(cacheKey, result, 60 * 5);
 
   return result;
 };

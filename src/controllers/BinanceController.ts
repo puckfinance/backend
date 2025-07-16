@@ -123,20 +123,20 @@ class BinanceController {
 
           // Fetch fresh position data to avoid race condition
           const currentPositions = await BinanceFunctions.currentPositions(client, symbol);
-          
+
           if (currentPositions.length === 0) {
             logger.info(`No open position found for ${symbol} after cancelling orders`);
           } else {
             const currentPosition = currentPositions[0];
             const positionAmt = parseFloat(currentPosition.positionAmt);
-            
+
             logger.info(`Current position for ${symbol}: ${positionAmt}, original side: ${side}`);
-            
+
             // Only close position if it matches the expected side from the original trade
             // This prevents closing opposite positions that might have been created by stop losses
             const isLongPosition = positionAmt > 0;
             const originalSideWasLong = side === 'BUY';
-            
+
             if (Math.abs(positionAmt) > 0 && isLongPosition === originalSideWasLong) {
               const closeOrder: NewFuturesOrder = {
                 symbol: symbol,
@@ -148,7 +148,11 @@ class BinanceController {
               await client.futuresOrder(closeOrder);
               logger.info(`Close order placed for ${symbol}: ${closeOrder.side} ${closeOrder.quantity}`);
             } else if (Math.abs(positionAmt) > 0) {
-              logger.warn(`Position side mismatch for ${symbol}. Current: ${isLongPosition ? 'LONG' : 'SHORT'}, Expected: ${originalSideWasLong ? 'LONG' : 'SHORT'}. Skipping position close to avoid race condition.`);
+              logger.warn(
+                `Position side mismatch for ${symbol}. Current: ${isLongPosition ? 'LONG' : 'SHORT'}, Expected: ${
+                  originalSideWasLong ? 'LONG' : 'SHORT'
+                }. Skipping position close to avoid race condition.`,
+              );
             } else {
               logger.info(`Position amount is zero for ${symbol}, no close order needed`);
             }
@@ -226,6 +230,29 @@ class BinanceController {
       res.json(result);
     } catch (error: any) {
       logger.error('Error getting Binance income', error);
+      res.status(500).json({ error: error?.message || '' });
+    }
+  }
+
+  public async getCommission(req: Request, res: Response, _next: NextFunction) {
+    try {
+      const trade_account_id = req.params.trade_account_id;
+
+      if (!trade_account_id) throw new Error('trade_account_id is empty.');
+
+      logger.info(`Getting commission for account ${trade_account_id}`);
+
+      const client = await BinanceFunctions.loadBinanceClient(trade_account_id);
+
+      if (!client) throw new Error('client not found.');
+
+      const result = await BinanceFunctions.getIncome(client, {
+        incomeType: FuturesIncomeType.COMMISSION,
+      });
+
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Error getting Binance commission', error);
       res.status(500).json({ error: error?.message || '' });
     }
   }
@@ -370,6 +397,7 @@ export default () => {
   router.get('/balance/:trade_account_id', controller.balance);
   router.get('/balance-v3/:trade_account_id', controller.balanceV3);
   router.get('/income/:trade_account_id', controller.income);
+  router.get('/commission/:trade_account_id', controller.getCommission);
   router.get('/snapshot/:trade_account_id', controller.getSnapshots);
 
   return router;
