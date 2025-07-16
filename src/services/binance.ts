@@ -462,6 +462,7 @@ const getIncome = async (
     endTime?: number;
     limit?: number;
   },
+  cacheId?: string,
 ) => {
   // default last 3 months
   const startTime = options?.startTime || moment().endOf('day').subtract(3, 'month').unix() * 1000;
@@ -470,6 +471,7 @@ const getIncome = async (
 
   // Create cache key based on all parameters that affect the result
   const cacheKey = [
+    cacheId || client.accountInfo.name,
     'income',
     options?.symbol || 'all',
     options?.incomeType || 'all',

@@ -223,9 +223,13 @@ class BinanceController {
 
       if (!client) throw new Error('client not found.');
 
-      const result = await BinanceFunctions.getIncome(client, {
-        incomeType: FuturesIncomeType.REALIZED_PNL,
-      });
+      const result = await BinanceFunctions.getIncome(
+        client,
+        {
+          incomeType: FuturesIncomeType.REALIZED_PNL,
+        },
+        trade_account_id,
+      );
 
       res.json(result);
     } catch (error: any) {
@@ -248,7 +252,7 @@ class BinanceController {
 
       const result = await BinanceFunctions.getIncome(client, {
         incomeType: FuturesIncomeType.COMMISSION,
-      });
+      }, trade_account_id);
 
       res.json(result);
     } catch (error: any) {
