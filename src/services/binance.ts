@@ -1,9 +1,4 @@
-import Binance, {
-  Binance as BinanceType,
-  FuturesIncomeType,
-  NewFuturesOrder,
-  OrderSide_LT,
-} from 'binance-api-node';
+import Binance, { Binance as BinanceType, FuturesIncomeType, NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
 
 import moment from 'moment';
 import { cache } from '../app';
@@ -93,14 +88,14 @@ const getTradeEntryInformationOptimized = async ({
   // Cache exchange info for 1 hour (it rarely changes)
   const cacheKey = `exchange-info-${symbol}`;
   let cachedExchangeInfo = cache.get(cacheKey);
-  
+
   // Parallelize independent API calls
   const [accountInfo, balances, trades] = await Promise.all([
     client.futuresAccountInfo(),
     client.futuresAccountBalance(),
     client.futuresTrades({ symbol, limit: 1 }),
   ]);
-  
+
   // Fetch exchange info if not cached
   let exchangeInfo = cachedExchangeInfo;
   if (!cachedExchangeInfo) {
@@ -110,7 +105,7 @@ const getTradeEntryInformationOptimized = async ({
 
   // Check positions from account info
   const positions = accountInfo.positions.filter(
-    (item: any) => parseFloat(item.entryPrice) > 0 && item.symbol === symbol
+    (item: any) => parseFloat(item.entryPrice) > 0 && item.symbol === symbol,
   );
 
   if (positions.length > 0) {
@@ -206,11 +201,12 @@ const entryOptimized = async ({
 
   const takeProfitOrder: NewFuturesOrder = {
     symbol: symbol,
-    stopPrice: convertToPrecision(takeProfitPrice, tickSize) as any,
-    closePosition: 'true',
-    type: 'TAKE_PROFIT_MARKET',
+    price: convertToPrecision(takeProfitPrice, tickSize) as any,
+    type: 'LIMIT',
     side: side === 'BUY' ? 'SELL' : 'BUY',
     quantity: `${currentQty}`,
+    timeInForce: 'GTC',
+    reduceOnly: 'true',
   };
 
   // Prepare partial profit orders
@@ -219,22 +215,22 @@ const entryOptimized = async ({
 
   if (partialProfits) {
     partialProfits.forEach((item) => {
-    const price = entryPrice + ((side === 'BUY' ? takeProfitPrice : -takeProfitPrice) - entryPrice) * item.where;
+      const price = entryPrice + ((side === 'BUY' ? takeProfitPrice : -takeProfitPrice) - entryPrice) * item.where;
 
-    let qty = convertToPrecision(currentQty * item.qty, quantityPrecision);
+      let qty = convertToPrecision(currentQty * item.qty, quantityPrecision);
 
-    if (item.where === 1) {
-      qty = convertToPrecision(origQty - previousQtys.reduce((acc, cur) => acc + cur, 0), quantityPrecision);
-    } else {
-      previousQtys.push(qty);
-    }
+      if (item.where === 1) {
+        qty = convertToPrecision(origQty - previousQtys.reduce((acc, cur) => acc + cur, 0), quantityPrecision);
+      } else {
+        previousQtys.push(qty);
+      }
 
       partialProfitOrders.push({
-      symbol: symbol,
-      price: convertToPrecision(price, tickSize) as any,
-      type: 'LIMIT',
-      side: side === 'BUY' ? 'SELL' : 'BUY',
-      quantity: `${qty}`,
+        symbol: symbol,
+        price: convertToPrecision(price, tickSize) as any,
+        type: 'LIMIT',
+        side: side === 'BUY' ? 'SELL' : 'BUY',
+        quantity: `${qty}`,
         timeInForce: 'GTC',
       });
     });
@@ -255,7 +251,7 @@ const entryOptimized = async ({
       client.futuresOrder(order).catch((error) => {
         console.error('Partial profit failed:', error);
         return null;
-      })
+      }),
     ),
   ];
 
@@ -279,7 +275,7 @@ const entryOptimized = async ({
       quantity: `${qty}`,
     };
     await client.futuresOrder(closeOrder);
-    }
+  }
 
   return {
     success: true,
@@ -362,7 +358,17 @@ const entryLimit = async ({
   };
 };
 
-const setStoploss = async ({ symbol, price, side, client }: { symbol: string; price: number; side: OrderSide_LT; client: BinanceType }) => {
+const setStoploss = async ({
+  symbol,
+  price,
+  side,
+  client,
+}: {
+  symbol: string;
+  price: number;
+  side: OrderSide_LT;
+  client: BinanceType;
+}) => {
   /* get precisions */
   const info = await client.futuresExchangeInfo();
   const symbolInfo = info.symbols.find((item) => item.symbol === symbol);
@@ -434,7 +440,13 @@ const getCurrentBalanceV3 = async (client: BinanceType) => {
   return balances;
 };
 
-const getTradeHistory = async (client: BinanceType, symbol: string, limit: number, startTime?: number, endTime?: number) => {
+const getTradeHistory = async (
+  client: BinanceType,
+  symbol: string,
+  limit: number,
+  startTime?: number,
+  endTime?: number,
+) => {
   // default last 3 months
   if (!startTime) startTime = moment().subtract(7, 'day').unix() * 1000;
   if (!endTime) endTime = moment().unix() * 1000;
