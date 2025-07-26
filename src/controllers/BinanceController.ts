@@ -315,8 +315,7 @@ class BinanceController {
         const stoploss =
           openOrders.find((order) => order.symbol === position.symbol && order.type === 'STOP_MARKET')?.stopPrice || '';
         const takeprofit =
-          openOrders.find((order) => order.symbol === position.symbol && order.type === 'TAKE_PROFIT_MARKET')
-            ?.stopPrice || '';
+          openOrders.find((order) => order.symbol === position.symbol && order.type === 'LIMIT' && order.reduceOnly)?.price || '';
 
         const size = parseFloat(position.positionAmt);
 
