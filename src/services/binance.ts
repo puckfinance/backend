@@ -205,7 +205,7 @@ const entryOptimized = async ({
     type: 'LIMIT',
     side: side === 'BUY' ? 'SELL' : 'BUY',
     quantity: `${currentQty}`,
-    timeInForce: 'GTC',
+    timeInForce:'GTX' as any ,
     reduceOnly: 'true',
   };
 
@@ -275,6 +275,19 @@ const entryOptimized = async ({
       quantity: `${qty}`,
     };
     await client.futuresOrder(closeOrder);
+  }
+
+  if (!executedTakeProfitOrder) {
+     const takeProfitOrder: NewFuturesOrder = {
+       symbol: symbol,
+       price: convertToPrecision(takeProfitPrice, tickSize) as any,
+       type: 'LIMIT',
+       side: side === 'BUY' ? 'SELL' : 'BUY',
+       quantity: `${currentQty}`,
+       timeInForce: 'GTC',
+       reduceOnly: 'true',
+     };
+    await client.futuresOrder(takeProfitOrder);
   }
 
   return {
