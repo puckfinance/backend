@@ -1,4 +1,4 @@
-import Binance, { Binance as BinanceType, FuturesIncomeType, NewFuturesOrder, OrderSide_LT } from 'binance-api-node';
+import Binance, { BinanceRest, OrderSide, OrderType, TimeInForce } from 'binance-api-node';
 
 import moment from 'moment';
 import { cache } from '../app';
@@ -6,7 +6,7 @@ import prisma from '../infrastructure/prisma';
 import { CryptoService } from './crypto';
 import logger from '../utils/Logger';
 
-export const loadBinanceClient = async (tradeAccountId: string): Promise<BinanceType> => {
+export const loadBinanceClient = async (tradeAccountId: string): Promise<BinanceRest> => {
   const tradeAccount = await prisma.tradeAccount.findUnique({
     where: {
       id: tradeAccountId,
@@ -42,11 +42,11 @@ export const convertToPrecision = (num: number, precision: number) => {
   return Math.trunc(num * Math.pow(10, precision)) / Math.pow(10, precision);
 };
 
-const checkConnection = (client: BinanceType) => {
+const checkConnection = (client: BinanceRest) => {
   return client.ping();
 };
 
-const currentPositions = async (client: BinanceType, symbol?: string) => {
+const currentPositions = async (client: BinanceRest, symbol?: string) => {
   const accountInfo = await client.futuresAccountInfo();
 
   const positions = accountInfo.positions.filter((item) => parseFloat(item.entryPrice) > 0);
@@ -63,14 +63,14 @@ interface EntryProps {
   risk: number;
   risk_amount: number;
   entryPrice: number;
-  side: OrderSide_LT;
+  side: OrderSide;
   stoplossPrice: number;
   takeProfitPrice: number;
   partialProfits?: {
     where: number;
     qty: number;
   }[];
-  client: BinanceType;
+  client: BinanceRest;
 }
 
 const getTradeEntryInformationOptimized = async ({
@@ -113,7 +113,7 @@ const getTradeEntryInformationOptimized = async ({
     throw new Error('Currently in a trade.');
   }
 
-  const balance = balances.find((item: any) => item.asset === process.env.CURRENCY);
+  const balance = balances.find((item) => item.asset === process.env.CURRENCY);
   const symbolInfo = (exchangeInfo as any).symbols.find((item: any) => item.symbol === symbol);
 
   const { quantityPrecision } = symbolInfo as unknown as Symbol & {
@@ -129,7 +129,7 @@ const getTradeEntryInformationOptimized = async ({
   if (!balance) throw new Error('balance is undefined.');
 
   const currentPrice = parseFloat(trades[0].price);
-  const riskAmount = risk_amount || parseFloat(balance.balance) * (risk / 100);
+  const riskAmount = risk_amount || parseFloat(balance.walletBalance) * (risk / 100);
   const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
   let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
@@ -145,7 +145,7 @@ const getTradeEntryInformationOptimized = async ({
 
   console.log({
     qty,
-    balance: balance.balance,
+    balance: balance.walletBalance,
     leverage: leverage.leverage,
     price: currentPrice,
     quantityPrecision,
@@ -157,152 +157,7 @@ const getTradeEntryInformationOptimized = async ({
 const entryOptimized = async ({
   symbol,
   entryPrice,
-  partialProfits,
-  risk,
-  risk_amount,
-  side,
-  stoplossPrice,
-  takeProfitPrice,
-  client,
-}: EntryProps) => {
-  const { qty, tickSize, quantityPrecision } = await getTradeEntryInformationOptimized({
-    symbol,
-    risk,
-    risk_amount,
-    entryPrice,
-    stoplossPrice,
-    client,
-  });
-
-  const entryOrder: NewFuturesOrder = {
-    symbol: symbol,
-    type: 'MARKET',
-    side,
-    quantity: `${qty}`,
-  };
-
-  // Execute entry order first (critical timing)
-  const executedEntryOrder = await client.futuresOrder(entryOrder);
-  console.log(`ENTRY`, { executedEntryOrder });
-
-  const origQty = parseFloat(executedEntryOrder.origQty);
-  const currentQty = Math.abs(origQty);
-
-  // Prepare all protection orders
-  const stopLossOrder: NewFuturesOrder = {
-    symbol: symbol,
-    stopPrice: convertToPrecision(stoplossPrice, tickSize) as any,
-    closePosition: 'true',
-    type: 'STOP_MARKET',
-    side: side === 'BUY' ? 'SELL' : 'BUY',
-    quantity: `${currentQty}`,
-    workingType: 'CONTRACT_PRICE',
-  };
-
-  const takeProfitOrder: NewFuturesOrder = {
-    symbol: symbol,
-    price: convertToPrecision(takeProfitPrice, tickSize) as any,
-    type: 'LIMIT',
-    side: side === 'BUY' ? 'SELL' : 'BUY',
-    quantity: `${currentQty}`,
-    timeInForce:'GTX' as any ,
-    reduceOnly: 'true',
-  };
-
-  // Prepare partial profit orders
-  const partialProfitOrders: NewFuturesOrder[] = [];
-  const previousQtys: number[] = [];
-
-  if (partialProfits) {
-    partialProfits.forEach((item) => {
-      const price = entryPrice + ((side === 'BUY' ? takeProfitPrice : -takeProfitPrice) - entryPrice) * item.where;
-
-      let qty = convertToPrecision(currentQty * item.qty, quantityPrecision);
-
-      if (item.where === 1) {
-        qty = convertToPrecision(origQty - previousQtys.reduce((acc, cur) => acc + cur, 0), quantityPrecision);
-      } else {
-        previousQtys.push(qty);
-      }
-
-      partialProfitOrders.push({
-        symbol: symbol,
-        price: convertToPrecision(price, tickSize) as any,
-        type: 'LIMIT',
-        side: side === 'BUY' ? 'SELL' : 'BUY',
-        quantity: `${qty}`,
-        timeInForce: 'GTC',
-      });
-    });
-  }
-
-  // Execute all protection orders in parallel
-  const orderPromises = [
-    client.futuresOrder(stopLossOrder).catch((error) => {
-      console.error('Stop loss failed:', error);
-      return null;
-    }),
-    client.futuresOrder(takeProfitOrder).catch((error) => {
-      console.error('Take profit failed:', error);
-      return null;
-    }),
-    // Execute partial profits in parallel
-    ...partialProfitOrders.map((order) =>
-      client.futuresOrder(order).catch((error) => {
-        console.error('Partial profit failed:', error);
-        return null;
-      }),
-    ),
-  ];
-
-  const [executedStoplossOrder, executedTakeProfitOrder, ...executedPartialProfits] = await Promise.all(orderPromises);
-
-  // Log results
-  console.log(`STOPLOSS`, { executedStoplossOrder });
-  console.log(`TAKEPROFIT`, { executedTakeProfitOrder });
-  executedPartialProfits.forEach((order, index) => {
-    if (order) {
-      console.log(`PARTIAL PROFIT ${index + 1}`, { order });
-    }
-  });
-
-  // If stop loss failed, close position immediately
-  if (!executedStoplossOrder) {
-    const closeOrder: NewFuturesOrder = {
-      symbol: symbol,
-      type: 'MARKET',
-      side: side === 'BUY' ? 'SELL' : 'BUY',
-      quantity: `${qty}`,
-    };
-    await client.futuresOrder(closeOrder);
-  }
-
-  if (!executedTakeProfitOrder) {
-     const takeProfitOrder: NewFuturesOrder = {
-       symbol: symbol,
-       price: convertToPrecision(takeProfitPrice, tickSize) as any,
-       type: 'LIMIT',
-       side: side === 'BUY' ? 'SELL' : 'BUY',
-       quantity: `${currentQty}`,
-       timeInForce: 'GTC',
-       reduceOnly: 'true',
-     };
-    await client.futuresOrder(takeProfitOrder);
-  }
-
-  return {
-    success: true,
-    entry: entryPrice,
-    stoploss: executedStoplossOrder?.stopPrice,
-    takeprofit: executedTakeProfitOrder?.stopPrice,
-    qty: executedEntryOrder.origQty,
-    partialProfits: executedPartialProfits.filter(Boolean),
-  };
-};
-
-const entryLimit = async ({
-  symbol,
-  entryPrice,
+  // partialProfits,
   risk,
   risk_amount,
   side,
@@ -319,57 +174,204 @@ const entryLimit = async ({
     client,
   });
 
-  const entryOrder: NewFuturesOrder = {
+  const entryOrder = {
     symbol: symbol,
-    type: 'LIMIT',
+    type: OrderType.MARKET,
     side,
     quantity: `${qty}`,
-    timeInForce: 'GTC',
-    price: `${convertToPrecision(entryPrice, tickSize)}`,
   };
 
-  // entry
-  let origQty: number = 0;
+  // Execute entry order first (critical timing)
+  const executedEntryOrder = await client.futuresOrder(entryOrder);
+  console.log(`ENTRY`, { executedEntryOrder });
 
-  console.log(`ENTRY`);
-
-  // stoploss
-  let price = stoplossPrice;
-
+  const origQty = parseFloat(executedEntryOrder.origQty);
   const currentQty = Math.abs(origQty);
 
-  const stopLossOrder: NewFuturesOrder = {
+  // Prepare all protection orders
+  const stopLossOrder: Parameters<typeof client.futuresCreateAlgoOrder>[0] = {
     symbol: symbol,
-    stopPrice: convertToPrecision(price, tickSize) as any,
-    closePosition: 'true',
-    type: 'STOP_MARKET',
-    side: side === 'BUY' ? 'SELL' : 'BUY',
+    price: convertToPrecision(stoplossPrice, tickSize) as any,
+    closePosition: true,
+    type: OrderType.STOP_MARKET,
+    side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
     quantity: `${currentQty}`,
     workingType: 'CONTRACT_PRICE',
   };
 
-  // set take_profit order
-  price = takeProfitPrice;
-
-  const takeProfitOrder: NewFuturesOrder = {
+  const takeProfitOrder: Parameters<typeof client.futuresCreateAlgoOrder>[0] = {
     symbol: symbol,
-    stopPrice: convertToPrecision(price, tickSize) as any,
-    closePosition: 'true',
-    type: 'TAKE_PROFIT_MARKET',
-    side: side === 'BUY' ? 'SELL' : 'BUY',
+    price: convertToPrecision(takeProfitPrice, tickSize) as any,
+    type: 'TAKE_PROFIT',
+    side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
     quantity: `${currentQty}`,
+    timeInForce: TimeInForce.GTC,
+    reduceOnly: 'true',
   };
 
-  const executedOrders = await client.futuresBatchOrders({
-    batchOrders: [entryOrder, stopLossOrder, takeProfitOrder],
+  // Prepare partial profit orders
+  // const partialProfitOrders: Parameters<typeof client.futuresCreateAlgoOrder>[0][] = [];
+  // const previousQtys: number[] = [];
+
+  // if (partialProfits) {
+  //   partialProfits.forEach((item) => {
+  //     const price = entryPrice + ((side === 'BUY' ? takeProfitPrice : -takeProfitPrice) - entryPrice) * item.where;
+
+  //     let qty = convertToPrecision(currentQty * item.qty, quantityPrecision);
+
+  //     if (item.where === 1) {
+  //       qty = convertToPrecision(origQty - previousQtys.reduce((acc, cur) => acc + cur, 0), quantityPrecision);
+  //     } else {
+  //       previousQtys.push(qty);
+  //     }
+
+  //     partialProfitOrders.push({
+  //       symbol: symbol,
+  //       price: convertToPrecision(price, tickSize) as any,
+  //       type: 'LIMIT',
+  //       side: side === 'BUY' ? 'SELL' : 'BUY',
+  //       quantity: `${qty}`,
+  //       timeInForce: 'GTC',
+  //     });
+  //   });
+  // }
+
+  // Execute all protection orders in parallel
+  const orderPromises = [
+    client.futuresCreateAlgoOrder(stopLossOrder).catch((error) => {
+      console.error('Stop loss failed:', error);
+      return null;
+    }),
+    client.futuresCreateAlgoOrder(takeProfitOrder).catch((error) => {
+      console.error('Take profit failed:', error);
+      return null;
+    }),
+    // Execute partial profits in parallel
+    // ...partialProfitOrders.map((order) =>
+    //   client.futuresCreateAlgoOrder(order).catch((error) => {
+    //     console.error('Partial profit failed:', error);
+    //     return null;
+    //   }),
+    // ),
+  ];
+
+  const [executedStoplossOrder, executedTakeProfitOrder, ...executedPartialProfits] = await Promise.all(orderPromises);
+
+  // Log results
+  console.log(`STOPLOSS`, { executedStoplossOrder });
+  console.log(`TAKEPROFIT`, { executedTakeProfitOrder });
+  executedPartialProfits.forEach((order, index) => {
+    if (order) {
+      console.log(`PARTIAL PROFIT ${index + 1}`, { order });
+    }
   });
+
+  // If stop loss failed, close position immediately
+  if (!executedStoplossOrder) {
+    const closeOrder: Parameters<typeof client.futuresOrder>[0] = {
+      symbol: symbol,
+      type: OrderType.MARKET,
+      side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
+      quantity: `${qty}`,
+    };
+    await client.futuresOrder(closeOrder);
+  }
+
+  // If take profit failed, try a take again order
+  if (!executedTakeProfitOrder) {
+    const takeProfitOrder: Parameters<typeof client.futuresCreateAlgoOrder>[0] = {
+      symbol: symbol,
+      price: convertToPrecision(takeProfitPrice, tickSize) as any,
+      type: OrderType.TAKE_PROFIT,
+      side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
+      quantity: `${currentQty}`,
+      timeInForce: TimeInForce.GTC,
+      reduceOnly: 'true',
+    };
+
+    await client.futuresCreateAlgoOrder(takeProfitOrder);
+  }
 
   return {
     success: true,
-    executedOrders,
-    qty: executedOrders[0].origQty,
+    entry: entryPrice,
+    stoploss: (executedStoplossOrder as any)?.price,
+    takeprofit: (executedTakeProfitOrder as any)?.stopPrice,
+    qty: executedEntryOrder.origQty,
+    partialProfits: executedPartialProfits.filter(Boolean),
   };
 };
+
+// const entryLimit = async ({
+//   symbol,
+//   entryPrice,
+//   risk,
+//   risk_amount,
+//   side,
+//   stoplossPrice,
+//   takeProfitPrice,
+//   client,
+// }: EntryProps) => {
+//   const { qty, tickSize } = await getTradeEntryInformationOptimized({
+//     symbol,
+//     risk,
+//     risk_amount,
+//     entryPrice,
+//     stoplossPrice,
+//     client,
+//   });
+
+//   const entryOrder: NewFuturesOrder = {
+//     symbol: symbol,
+//     type: 'LIMIT',
+//     side,
+//     quantity: `${qty}`,
+//     timeInForce: 'GTC',
+//     price: `${convertToPrecision(entryPrice, tickSize)}`,
+//   };
+
+//   // entry
+//   let origQty: number = 0;
+
+//   console.log(`ENTRY`);
+
+//   // stoploss
+//   let price = stoplossPrice;
+
+//   const currentQty = Math.abs(origQty);
+
+//   const stopLossOrder: NewFuturesOrder = {
+//     symbol: symbol,
+//     stopPrice: convertToPrecision(price, tickSize) as any,
+//     closePosition: 'true',
+//     type: 'STOP_MARKET',
+//     side: side === 'BUY' ? 'SELL' : 'BUY',
+//     quantity: `${currentQty}`,
+//     workingType: 'CONTRACT_PRICE',
+//   };
+
+//   // set take_profit order
+//   price = takeProfitPrice;
+
+//   const takeProfitOrder: NewFuturesOrder = {
+//     symbol: symbol,
+//     stopPrice: convertToPrecision(price, tickSize) as any,
+//     closePosition: 'true',
+//     type: 'TAKE_PROFIT_MARKET',
+//     side: side === 'BUY' ? 'SELL' : 'BUY',
+//     quantity: `${currentQty}`,
+//   };
+
+//   const executedOrders = await client.futuresBatchOrders({
+//     batchOrders: [entryOrder, stopLossOrder, takeProfitOrder],
+//   });
+
+//   return {
+//     success: true,
+//     executedOrders,
+//     qty: executedOrders[0].origQty,
+//   };
+// };
 
 const setStoploss = async ({
   symbol,
@@ -379,16 +381,16 @@ const setStoploss = async ({
 }: {
   symbol: string;
   price: number;
-  side: OrderSide_LT;
-  client: BinanceType;
+  side: OrderSide;
+  client: BinanceRest;
 }) => {
   /* get precisions */
   const info = await client.futuresExchangeInfo();
-  const symbolInfo = info.symbols.find((item) => item.symbol === symbol);
+  const symbolInfo = info.symbols.find((item: any) => item.symbol === symbol);
 
   if (!symbolInfo) throw new Error('symbolInfo is undefined.');
 
-  const priceFilter = symbolInfo.filters.find((item) => item.filterType === 'PRICE_FILTER');
+  const priceFilter = symbolInfo.filters.find((item: any) => item.filterType === 'PRICE_FILTER');
   const tickSize = countDecimals(parseFloat((priceFilter as any).tickSize as string));
 
   const currentPosition = await getPosition(symbol, client);
@@ -402,29 +404,32 @@ const setStoploss = async ({
   // remove previous stop market orders
 
   // list previous orders
-  const orders = await client.futuresOpenOrders({ symbol });
+  const orders = await client.futuresGetOpenAlgoOrders({ symbol });
   // cancel orders
-  const orderIdList = orders?.flatMap(({ orderId, origType }) => {
-    if (origType === 'STOP_MARKET') return orderId;
+  const orderAlgoIdList = orders?.flatMap((order) => {
+    if (order.type === 'STOP_MARKET') return order.algoId;
     return [];
   });
 
-  console.log({ orderIdList, string: JSON.stringify(orderIdList) });
+  console.log({ orderAlgoIdList, string: JSON.stringify(orderAlgoIdList) });
 
-  if (Array.isArray(orderIdList) && orderIdList.length > 0)
-    await client.futuresCancelBatchOrders({ symbol, orderIdList: JSON.stringify(orderIdList) });
+  if (Array.isArray(orderAlgoIdList) && orderAlgoIdList.length > 0) {
+    for (const algoId of orderAlgoIdList) {
+      await client.futuresCancelAlgoOrder({ symbol, algoId });
+    }
+  }
 
-  const stopLossOrder: NewFuturesOrder = {
+  const stopLossOrder: Parameters<typeof client.futuresCreateAlgoOrder>[0] = {
     symbol: symbol,
-    stopPrice: convertToPrecision(price, tickSize) as any,
-    closePosition: 'true',
-    type: 'STOP_MARKET',
-    side: side === 'BUY' ? 'SELL' : 'BUY',
+    price: convertToPrecision(price, tickSize) as any,
+    closePosition: true,
+    type: OrderType.STOP_MARKET,
+    side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
     quantity: `${currentQty}`,
   };
 
   try {
-    const executedStopLossOrder = await client.futuresOrder(stopLossOrder);
+    const executedStopLossOrder = await client.futuresCreateAlgoOrder(stopLossOrder);
 
     console.log('MOVE STOPLOSS');
     console.log({ executedStopLossOrder });
@@ -434,7 +439,7 @@ const setStoploss = async ({
   }
 };
 
-const getPosition = async (symbol: string, client: BinanceType) => {
+const getPosition = async (symbol: string, client: BinanceRest) => {
   console.log({ symbol });
 
   const positions = await currentPositions(client, symbol);
@@ -442,19 +447,19 @@ const getPosition = async (symbol: string, client: BinanceType) => {
   return positions.find((item) => item.symbol === symbol) || undefined;
 };
 
-const getCurrentBalance = async (client: BinanceType) => {
+const getCurrentBalance = async (client: BinanceRest) => {
   const balances = await client.futuresAccountBalance();
   const balance = balances.find((item) => item.asset === process.env.CURRENCY);
   return balance;
 };
 
-const getCurrentBalanceV3 = async (client: BinanceType) => {
+const getCurrentBalanceV3 = async (client: BinanceRest) => {
   const balances = await client.futuresAccountBalance();
   return balances;
 };
 
 const getTradeHistory = async (
-  client: BinanceType,
+  client: BinanceRest,
   symbol: string,
   limit: number,
   startTime?: number,
@@ -479,10 +484,10 @@ const getTradeHistory = async (
 };
 
 const getIncome = async (
-  client: BinanceType,
+  client: BinanceRest,
   options?: {
     symbol?: string;
-    incomeType?: FuturesIncomeType;
+    incomeType?: 'REALIZED_PNL' | 'FUNDING_FEE' | 'COMMISSION' | 'TRANSFER';
     startTime?: number;
     endTime?: number;
     limit?: number;
@@ -522,12 +527,12 @@ const getIncome = async (
   return result;
 };
 
-const getOpenOrders = async (client: BinanceType) => {
-  const orders = await client.futuresOpenOrders({});
+const getOpenAlgoOrders = async (client: BinanceRest) => {
+  const orders = await client.futuresGetOpenAlgoOrders({});
   return orders;
 };
 
-const getPnl = async (client: BinanceType) => {
+const getPnl = async (client: BinanceRest) => {
   const orders = await client.futuresIncome({
     symbol: process.env.TRADE_PAIR,
     startTime: moment().subtract(3, 'month').unix() * 1000,
@@ -545,7 +550,7 @@ const getSnapshot = async ({
 }: {
   startTime: number;
   endTime: number;
-  client: BinanceType;
+  client: BinanceRest;
 }) => {
   const cacheKey = ['snapshot', startTime, endTime].join('-');
 
@@ -570,13 +575,13 @@ const BinanceFunctions = {
   currentPositions,
   entry: entryOptimized, // Use optimized version as default
   entryOptimized,
-  entryLimit,
+  // entryLimit,
   getPnl,
   getPosition,
   setStoploss,
   getCurrentBalance,
   getTradeHistory,
-  getOpenOrders,
+  getOpenAlgoOrders,
   getIncome,
   getSnapshot,
   loadBinanceClient,

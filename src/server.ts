@@ -6,7 +6,6 @@ import dotenv from 'dotenv';
 import { run } from './app';
 import { connectPrisma, disconnectPrisma } from './infrastructure/prisma';
 import logger from './utils/Logger';
-import { initializeWebSocket } from './controllers/webSocket.controller';
 
 dotenv.config();
 
@@ -37,15 +36,13 @@ class MainServer {
     try {
       // Connect to Prisma before app initialization
       await connectPrisma();
-      
+
       // Initialize Express app
       this._app = await run();
       this.server = createServer(this._app);
 
-      initializeWebSocket(this.server);
-
       this.listen();
-      
+
       // Handle graceful shutdown
       this.setupGracefulShutdown();
     } catch (error) {
@@ -74,7 +71,7 @@ class MainServer {
     // Handle uncaught exceptions - but in production, try to keep the server running
     process.on('uncaughtException', async (error) => {
       logger.error('Uncaught Exception:', error);
-      
+
       // In production, log the error but try to keep the server running unless it's a critical error
       if (process.env.NODE_ENV === 'production') {
         // Only exit if it's a critical error we can't recover from
@@ -95,7 +92,7 @@ class MainServer {
     // Handle unhandled promise rejections
     process.on('unhandledRejection', async (reason, promise) => {
       logger.error('Unhandled Rejection at:', { promise, reason });
-      
+
       // In production, log the error but don't exit the process
       if (process.env.NODE_ENV !== 'production') {
         // In development, exit for easier debugging
@@ -111,29 +108,21 @@ class MainServer {
    */
   private isCriticalError(error: Error): boolean {
     // Define what constitutes a critical error
-    const criticalErrorTypes = [
-      'SystemError',
-      'ReferenceError'
-    ];
-    
+    const criticalErrorTypes = ['SystemError', 'ReferenceError'];
+
     // Check if error is from a critical subsystem
-    const criticalErrorMessages = [
-      'database connection',
-      'out of memory',
-      'prisma',
-      'ECONNREFUSED'
-    ];
-    
+    const criticalErrorMessages = ['database connection', 'out of memory', 'prisma', 'ECONNREFUSED'];
+
     // Check error type
-    if (criticalErrorTypes.some(type => error.name === type)) {
+    if (criticalErrorTypes.some((type) => error.name === type)) {
       return true;
     }
-    
+
     // Check error message
-    if (criticalErrorMessages.some(msg => error.message.toLowerCase().includes(msg))) {
+    if (criticalErrorMessages.some((msg) => error.message.toLowerCase().includes(msg))) {
       return true;
     }
-    
+
     return false;
   }
 
@@ -164,7 +153,7 @@ class MainServer {
 
   public async unlisten(): Promise<void> {
     if (!this.server) return;
-    
+
     await this.shutdown();
   }
 

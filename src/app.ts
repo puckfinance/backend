@@ -4,7 +4,6 @@ import morgan from 'morgan';
 import passport from 'passport';
 import dotenv from 'dotenv';
 import Routes from './routes';
-import webSocketRoutes from './routes/webSocket.routes';
 import { ErrorResponse } from './middlewares';
 import NodeCache from 'node-cache';
 import PassportConfig from './middlewares/Passport';
@@ -36,7 +35,7 @@ export const run = async () => {
   // Set timeout to prevent long-running requests from causing the server to hang
   const timeoutDuration = process.env.TIMEOUT || '60000';
   app.use(timeout(timeoutDuration));
-  
+
   // Add request ID middleware for better logging and tracking
   app.use((req, res, next) => {
     req.id = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
@@ -45,13 +44,13 @@ export const run = async () => {
   });
 
   app.set('trust proxy', 1);
-  
+
   // Configure CORS with proper error handling
   const corsOptions = {
     origin: process.env.CORS_ORIGIN || '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     preflightContinue: false,
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
   };
   app.use(cors(corsOptions));
 
@@ -64,14 +63,14 @@ export const run = async () => {
         limit: '10mb',
         verify: (req: express.Request, _res, buf) => {
           req.rawBody = buf;
-        }
+        },
       })(req, res, (err) => {
         if (err) {
           logger.error('JSON parsing error', err);
-          return res.status(400).json({ 
+          return res.status(400).json({
             status: false,
             message: 'Invalid JSON payload',
-            data: null
+            data: null,
           });
         }
         next();
@@ -84,54 +83,58 @@ export const run = async () => {
     app.use(morgan('dev'));
   } else {
     // Use a custom morgan format that works with our logger in production
-    app.use(morgan((tokens, req, res) => {
-      return JSON.stringify({
-        method: tokens.method(req, res),
-        url: tokens.url(req, res),
-        status: tokens.status(req, res),
-        responseTime: tokens['response-time'](req, res),
-        contentLength: tokens.res(req, res, 'content-length'),
-        userAgent: tokens['user-agent'](req, res),
-        requestId: req.id
-      });
-    }, {
-      stream: {
-        write: (message) => {
-          const data = JSON.parse(message);
-          logger.info('HTTP Request', data);
-        }
-      }
-    }));
+    app.use(
+      morgan(
+        (tokens, req, res) => {
+          return JSON.stringify({
+            method: tokens.method(req, res),
+            url: tokens.url(req, res),
+            status: tokens.status(req, res),
+            responseTime: tokens['response-time'](req, res),
+            contentLength: tokens.res(req, res, 'content-length'),
+            userAgent: tokens['user-agent'](req, res),
+            requestId: req.id,
+          });
+        },
+        {
+          stream: {
+            write: (message) => {
+              const data = JSON.parse(message);
+              logger.info('HTTP Request', data);
+            },
+          },
+        },
+      ),
+    );
   }
 
   app.use(passport.initialize());
   app.options('*', cors(corsOptions));
-  
+
   // Basic health check endpoint
   app.get('/', (_req, res) => {
     res.send('Success');
   });
-  
+
   app.post('/', (_req, res) => {
     res.send('Success POST');
   });
-  
+
   // Add timeout handler to avoid server hanging due to long-running requests
   app.use((req, _res, next) => {
     if (!req.timedout) return next();
-    
+
     logger.warn(`Request timeout: ${req.method} ${req.url}`);
     next(new HttpException(408, 'Request timeout'));
   });
-  
-  app.use(webSocketRoutes);
+
   app.use('/api/v1', Routes());
-  
+
   // 404 handler
   app.use((req, _res, next) => {
     next(new HttpException(404, `Route not found: ${req.method} ${req.url}`));
   });
-  
+
   // Global error handler
   app.use(ErrorResponse);
 

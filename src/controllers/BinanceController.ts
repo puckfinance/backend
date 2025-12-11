@@ -5,15 +5,16 @@ import { NextFunction } from 'express';
 import { Request } from 'express';
 import { Response } from 'express';
 import apiKeyMiddleware from '../middlewares/apikey';
-import { FuturesAccountPosition, FuturesIncomeType, NewFuturesOrder } from 'binance-api-node';
+// import { FuturesAccountPosition, FuturesIncomeType, NewFuturesOrder } from 'binance-api-node';
 import logger from '../utils/Logger';
+import { OrderSide, OrderType } from 'binance-api-node';
 
 class BinanceController {
   public async entry(req: Request, res: Response, _next: NextFunction) {
     try {
       const entrySchema = z.object({
         symbol: z.string(),
-        side: z.enum(['BUY', 'SELL']),
+        side: z.enum([OrderSide.BUY, OrderSide.SELL]),
         price: z.string().optional(),
         risk: z.any().optional(),
         risk_amount: z.any().optional(),
@@ -73,32 +74,32 @@ class BinanceController {
 
           return res.status(200).json(result);
         }
-        case 'ENTRY_LIMIT': {
-          if (!price) throw new Error('price is empty.');
+        // case 'ENTRY_LIMIT': {
+        //   if (!price) throw new Error('price is empty.');
 
-          if (!stoploss_price) throw new Error('stoploss_price is empty.');
+        //   if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
-          if (!takeprofit_price) throw new Error('take_profit is empty.');
+        //   if (!takeprofit_price) throw new Error('take_profit is empty.');
 
-          if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
+        //   if (!risk && !risk_amount) throw new Error('risk and risk_amount is empty.');
 
-          logger.info(
-            `Entry limit order for ${symbol}: ${side} at ${price} with SL ${stoploss_price} and TP ${takeprofit_price}`,
-          );
+        //   logger.info(
+        //     `Entry limit order for ${symbol}: ${side} at ${price} with SL ${stoploss_price} and TP ${takeprofit_price}`,
+        //   );
 
-          const result = await BinanceFunctions.entryLimit({
-            client,
-            symbol,
-            side,
-            entryPrice: parseFloat(price),
-            risk: parseFloat(risk),
-            risk_amount: parseFloat(risk_amount),
-            stoplossPrice: parseFloat(stoploss_price),
-            takeProfitPrice: parseFloat(takeprofit_price),
-          });
+        //   const result = await BinanceFunctions.entryLimit({
+        //     client,
+        //     symbol,
+        //     side,
+        //     entryPrice: parseFloat(price),
+        //     risk: parseFloat(risk),
+        //     risk_amount: parseFloat(risk_amount),
+        //     stoplossPrice: parseFloat(stoploss_price),
+        //     takeProfitPrice: parseFloat(takeprofit_price),
+        //   });
 
-          return res.status(200).json(result);
-        }
+        //   return res.status(200).json(result);
+        // }
         case 'MOVE_STOPLOSS': {
           if (!stoploss_price) throw new Error('stoploss_price is empty.');
 
@@ -138,10 +139,10 @@ class BinanceController {
             const originalSideWasLong = side === 'BUY';
 
             if (Math.abs(positionAmt) > 0 && isLongPosition === originalSideWasLong) {
-              const closeOrder: NewFuturesOrder = {
+              const closeOrder: Parameters<typeof client.futuresOrder>[0] = {
                 symbol: symbol,
-                type: 'MARKET',
-                side: positionAmt > 0 ? 'SELL' : 'BUY',
+                type: OrderType.MARKET,
+                side: positionAmt > 0 ? OrderSide.SELL : OrderSide.BUY,
                 quantity: `${Math.abs(positionAmt)}`,
               };
 
@@ -226,7 +227,7 @@ class BinanceController {
       const result = await BinanceFunctions.getIncome(
         client,
         {
-          incomeType: FuturesIncomeType.REALIZED_PNL,
+          incomeType: 'REALIZED_PNL',
         },
         trade_account_id,
       );
@@ -250,9 +251,13 @@ class BinanceController {
 
       if (!client) throw new Error('client not found.');
 
-      const result = await BinanceFunctions.getIncome(client, {
-        incomeType: FuturesIncomeType.COMMISSION,
-      }, trade_account_id);
+      const result = await BinanceFunctions.getIncome(
+        client,
+        {
+          incomeType: 'COMMISSION',
+        },
+        trade_account_id,
+      );
 
       res.json(result);
     } catch (error: any) {
@@ -300,11 +305,11 @@ class BinanceController {
 
       const positions = await BinanceFunctions.currentPositions(client);
 
-      const openOrders = await BinanceFunctions.getOpenOrders(client);
+      const openOrders = await BinanceFunctions.getOpenAlgoOrders(client);
 
       // calculate stoploss and takeprofit amount for each position
 
-      type ExtendedPosition = FuturesAccountPosition & {
+      type ExtendedPosition = (typeof positions)[number] & {
         stoploss: string;
         takeprofit: string;
         stoplossAmount: number;
@@ -313,9 +318,11 @@ class BinanceController {
 
       const extendedPositions: ExtendedPosition[] = positions.map((position) => {
         const stoploss =
-          openOrders.find((order) => order.symbol === position.symbol && order.type === 'STOP_MARKET')?.stopPrice || '';
+          openOrders.find((order) => order.symbol === position.symbol && order.type === 'STOP_MARKET')?.price || '';
         const takeprofit =
-          openOrders.find((order) => order.symbol === position.symbol && order.type === 'LIMIT' && order.reduceOnly)?.price || '';
+          openOrders.find(
+            (order) => order.symbol === position.symbol && order.type === 'TAKE_PROFIT' && (order as any).reduceOnly,
+          )?.price || '';
 
         const size = parseFloat(position.positionAmt);
 
@@ -354,7 +361,7 @@ class BinanceController {
 
       if (!client) throw new Error('client not found.');
 
-      const result = await BinanceFunctions.getOpenOrders(client);
+      const result = await BinanceFunctions.getOpenAlgoOrders(client);
 
       res.status(200).json(result);
     } catch (error: any) {
