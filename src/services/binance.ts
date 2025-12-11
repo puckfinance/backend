@@ -129,7 +129,7 @@ const getTradeEntryInformationOptimized = async ({
   if (!balance) throw new Error('balance is undefined.');
 
   const currentPrice = parseFloat(trades[0].price);
-  const riskAmount = risk_amount || parseFloat(balance.walletBalance) * (risk / 100);
+  const riskAmount = risk_amount || parseFloat(balance.crossWalletBalance) * (risk / 100);
   const qty = convertToPrecision(riskAmount / Math.abs(entryPrice - stoplossPrice), quantityPrecision);
 
   let setLeverage = Math.ceil(((qty * currentPrice) / parseFloat(balance.availableBalance)) * 1.1);
@@ -176,8 +176,8 @@ const entryOptimized = async ({
 
   const entryOrder = {
     symbol: symbol,
-    type: OrderType.MARKET,
-    side: side === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
+    type: 'MARKET' as OrderType.MARKET,
+    side: side as OrderSide,
     quantity: `${qty}`,
   };
 
@@ -191,10 +191,10 @@ const entryOptimized = async ({
   // Prepare all protection orders
   const stopLossOrder: Parameters<typeof client.futuresCreateAlgoOrder>[0] = {
     symbol: symbol,
-    price: convertToPrecision(stoplossPrice, tickSize) as any,
+    triggerPrice: convertToPrecision(stoplossPrice, tickSize) as any,
     closePosition: true,
-    type: OrderType.STOP_MARKET,
-    side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
+    type: 'STOP_MARKET' as OrderType.STOP_MARKET,
+    side: (side === 'BUY' ? 'SELL' : 'BUY') as OrderSide,
     quantity: `${currentQty}`,
     workingType: 'CONTRACT_PRICE',
   };
@@ -203,10 +203,12 @@ const entryOptimized = async ({
     symbol: symbol,
     price: convertToPrecision(takeProfitPrice, tickSize) as any,
     type: 'TAKE_PROFIT',
-    side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
+    side: (side === 'BUY' ? 'SELL' : 'BUY') as OrderSide,
     quantity: `${currentQty}`,
-    timeInForce: TimeInForce.GTC,
+    timeInForce: 'GTC' as TimeInForce,
     reduceOnly: 'true',
+    workingType: 'CONTRACT_PRICE',
+    triggerPrice: convertToPrecision(takeProfitPrice, tickSize) as any,
   };
 
   // Prepare partial profit orders
@@ -270,8 +272,8 @@ const entryOptimized = async ({
   if (!executedStoplossOrder) {
     const closeOrder: Parameters<typeof client.futuresOrder>[0] = {
       symbol: symbol,
-      type: OrderType.MARKET,
-      side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
+      type: 'MARKET' as OrderType.MARKET,
+      side: (side === 'BUY' ? 'SELL' : 'BUY') as OrderSide,
       quantity: `${qty}`,
     };
     await client.futuresOrder(closeOrder);
@@ -282,10 +284,10 @@ const entryOptimized = async ({
     const takeProfitOrder: Parameters<typeof client.futuresCreateAlgoOrder>[0] = {
       symbol: symbol,
       price: convertToPrecision(takeProfitPrice, tickSize) as any,
-      type: OrderType.TAKE_PROFIT,
-      side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
+      type: 'TAKE_PROFIT' as OrderType.TAKE_PROFIT,
+      side: (side === 'BUY' ? 'SELL' : 'BUY') as OrderSide,
       quantity: `${currentQty}`,
-      timeInForce: TimeInForce.GTC,
+      timeInForce: 'GTC' as TimeInForce,
       reduceOnly: 'true',
     };
 
@@ -295,8 +297,8 @@ const entryOptimized = async ({
   return {
     success: true,
     entry: entryPrice,
-    stoploss: (executedStoplossOrder as any)?.price,
-    takeprofit: (executedTakeProfitOrder as any)?.stopPrice,
+    stoploss: (executedStoplossOrder as any)?.triggerPrice,
+    takeprofit: (executedTakeProfitOrder as any)?.triggerPrice,
     qty: executedEntryOrder.origQty,
     partialProfits: executedPartialProfits.filter(Boolean),
   };
@@ -407,7 +409,8 @@ const setStoploss = async ({
   const orders = await client.futuresGetOpenAlgoOrders({ symbol });
   // cancel orders
   const orderAlgoIdList = orders?.flatMap((order) => {
-    if (order.type === 'STOP_MARKET') return order.algoId;
+    console.log({ order });
+    if ((order as any).orderType === 'STOP_MARKET') return order.algoId;
     return [];
   });
 
@@ -421,11 +424,11 @@ const setStoploss = async ({
 
   const stopLossOrder: Parameters<typeof client.futuresCreateAlgoOrder>[0] = {
     symbol: symbol,
-    price: convertToPrecision(price, tickSize) as any,
-    closePosition: true,
-    type: OrderType.STOP_MARKET,
-    side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
+    triggerPrice: convertToPrecision(price, tickSize) as any,
+    type: 'STOP_MARKET' as OrderType.STOP_MARKET,
+    side: (side === 'BUY' ? 'SELL' : 'BUY') as OrderSide,
     quantity: `${currentQty}`,
+    workingType: 'CONTRACT_PRICE',
   };
 
   try {
