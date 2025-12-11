@@ -37,9 +37,9 @@ jobs:
     - name: run update script
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: trade.munkhjin.fun
-        username: munkhjin
+        host: trade.puck.live
+        username: root
         password: ${{ secrets.SSH_PASSWORD }}
         port: 22
         script: | 
-          ./update.sh
+          cd puck-backend && ./update.sh
