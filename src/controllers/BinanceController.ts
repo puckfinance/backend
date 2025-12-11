@@ -14,7 +14,7 @@ class BinanceController {
     try {
       const entrySchema = z.object({
         symbol: z.string(),
-        side: z.enum([OrderSide.BUY, OrderSide.SELL]),
+        side: z.enum(['BUY', 'SELL']),
         price: z.string().optional(),
         risk: z.any().optional(),
         risk_amount: z.any().optional(),
@@ -64,7 +64,7 @@ class BinanceController {
           const result = await BinanceFunctions.entry({
             client,
             symbol,
-            side,
+            side: side === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
             entryPrice: parseFloat(price),
             risk: parseFloat(risk),
             risk_amount: parseFloat(risk_amount),
@@ -108,7 +108,7 @@ class BinanceController {
           const result = await BinanceFunctions.setStoploss({
             client,
             symbol,
-            side,
+            side: side === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
             price: parseFloat(stoploss_price),
           });
 
