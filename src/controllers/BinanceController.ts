@@ -120,7 +120,7 @@ class BinanceController {
         case 'EXIT': {
           // Cancel all open orders first
           logger.info(`Cancelling all open orders for ${symbol}`);
-          await client.futuresCancelAllOpenOrders({
+          await client.futuresCancelAllAlgoOpenOrders({
             symbol,
           });
 
@@ -143,8 +143,8 @@ class BinanceController {
             if (Math.abs(positionAmt) > 0 && isLongPosition === originalSideWasLong) {
               const closeOrder: Parameters<typeof client.futuresOrder>[0] = {
                 symbol: symbol,
-                type: OrderType.MARKET,
-                side: positionAmt > 0 ? OrderSide.SELL : OrderSide.BUY,
+                type: 'MARKET' as OrderType.MARKET,
+                side: (positionAmt > 0 ? 'SELL' : 'BUY') as OrderSide,
                 quantity: `${Math.abs(positionAmt)}`,
               };
 
@@ -320,11 +320,15 @@ class BinanceController {
 
       const extendedPositions: ExtendedPosition[] = positions.map((position) => {
         const stoploss =
-          openOrders.find((order) => order.symbol === position.symbol && order.type === 'STOP_MARKET')?.price || '';
+          openOrders.find((order) => order.symbol === position.symbol && (order as any).orderType === 'STOP_MARKET')
+            ?.triggerPrice || '';
         const takeprofit =
           openOrders.find(
-            (order) => order.symbol === position.symbol && order.type === 'TAKE_PROFIT' && (order as any).reduceOnly,
-          )?.price || '';
+            (order) =>
+              order.symbol === position.symbol &&
+              (order as any).orderType === 'TAKE_PROFIT' &&
+              (order as any).reduceOnly,
+          )?.triggerPrice || '';
 
         const size = parseFloat(position.positionAmt);
 
