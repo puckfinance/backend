@@ -26,6 +26,8 @@ class BinanceController {
       let { symbol, side, price, risk, risk_amount, action, stoploss_price, takeprofit_price } =
         await entrySchema.parseAsync(req.body);
 
+      console.log({ symbol, side, price, risk, risk_amount, action, stoploss_price, takeprofit_price });
+
       symbol = symbol?.split('.')?.[0];
 
       if (!symbol) throw new Error(`Symbol error ${symbol}`);
@@ -64,7 +66,7 @@ class BinanceController {
           const result = await BinanceFunctions.entry({
             client,
             symbol,
-            side: side === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
+            side: side,
             entryPrice: parseFloat(price),
             risk: parseFloat(risk),
             risk_amount: parseFloat(risk_amount),
@@ -108,7 +110,7 @@ class BinanceController {
           const result = await BinanceFunctions.setStoploss({
             client,
             symbol,
-            side: side === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
+            side,
             price: parseFloat(stoploss_price),
           });
 

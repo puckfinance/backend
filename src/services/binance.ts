@@ -63,7 +63,7 @@ interface EntryProps {
   risk: number;
   risk_amount: number;
   entryPrice: number;
-  side: OrderSide;
+  side: 'BUY' | 'SELL';
   stoplossPrice: number;
   takeProfitPrice: number;
   partialProfits?: {
@@ -177,7 +177,7 @@ const entryOptimized = async ({
   const entryOrder = {
     symbol: symbol,
     type: OrderType.MARKET,
-    side,
+    side: side === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
     quantity: `${qty}`,
   };
 
@@ -194,7 +194,7 @@ const entryOptimized = async ({
     price: convertToPrecision(stoplossPrice, tickSize) as any,
     closePosition: true,
     type: OrderType.STOP_MARKET,
-    side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
+    side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
     quantity: `${currentQty}`,
     workingType: 'CONTRACT_PRICE',
   };
@@ -203,7 +203,7 @@ const entryOptimized = async ({
     symbol: symbol,
     price: convertToPrecision(takeProfitPrice, tickSize) as any,
     type: 'TAKE_PROFIT',
-    side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
+    side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
     quantity: `${currentQty}`,
     timeInForce: TimeInForce.GTC,
     reduceOnly: 'true',
@@ -271,7 +271,7 @@ const entryOptimized = async ({
     const closeOrder: Parameters<typeof client.futuresOrder>[0] = {
       symbol: symbol,
       type: OrderType.MARKET,
-      side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
+      side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
       quantity: `${qty}`,
     };
     await client.futuresOrder(closeOrder);
@@ -283,7 +283,7 @@ const entryOptimized = async ({
       symbol: symbol,
       price: convertToPrecision(takeProfitPrice, tickSize) as any,
       type: OrderType.TAKE_PROFIT,
-      side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
+      side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
       quantity: `${currentQty}`,
       timeInForce: TimeInForce.GTC,
       reduceOnly: 'true',
@@ -381,7 +381,7 @@ const setStoploss = async ({
 }: {
   symbol: string;
   price: number;
-  side: OrderSide;
+  side: 'BUY' | 'SELL';
   client: BinanceRest;
 }) => {
   /* get precisions */
@@ -424,7 +424,7 @@ const setStoploss = async ({
     price: convertToPrecision(price, tickSize) as any,
     closePosition: true,
     type: OrderType.STOP_MARKET,
-    side: side === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY,
+    side: side === 'BUY' ? OrderSide.SELL : OrderSide.BUY,
     quantity: `${currentQty}`,
   };
 
