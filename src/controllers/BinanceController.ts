@@ -141,11 +141,12 @@ class BinanceController {
             const originalSideWasLong = side === 'BUY';
 
             if (Math.abs(positionAmt) > 0 && isLongPosition === originalSideWasLong) {
-              const closeOrder: Parameters<typeof client.futuresOrder>[0] = {
+              const closeOrder: Parameters<typeof client.futuresOrder>[0] & { reduceOnly?: string } = {
                 symbol: symbol,
                 type: 'MARKET' as OrderType.MARKET,
                 side: (positionAmt > 0 ? 'SELL' : 'BUY') as OrderSide,
                 quantity: `${Math.abs(positionAmt)}`,
+                reduceOnly: 'true',
               };
 
               await client.futuresOrder(closeOrder);

@@ -270,11 +270,12 @@ const entryOptimized = async ({
 
   // If stop loss failed, close position immediately
   if (!executedStoplossOrder) {
-    const closeOrder: Parameters<typeof client.futuresOrder>[0] = {
+    const closeOrder: Parameters<typeof client.futuresOrder>[0] & { reduceOnly?: string } = {
       symbol: symbol,
       type: 'MARKET' as OrderType.MARKET,
       side: (side === 'BUY' ? 'SELL' : 'BUY') as OrderSide,
       quantity: `${qty}`,
+      reduceOnly: 'true',
     };
     await client.futuresOrder(closeOrder);
   }
