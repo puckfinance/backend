@@ -5,6 +5,7 @@ import BybitController from '../controllers/BybitController';
 import TradeAccountController from '../controllers/TradeAccountController';
 import StrategyController from '../controllers/StrategyController';
 import authRoutes from './auth.routes';
+import whaleRoutes from './whale.routes';
 
 /**
  * Http router class (post, get, put, delete, patch etc)
@@ -22,6 +23,7 @@ export default () => {
   routes.use('/bybit', BybitController());
   routes.use('/trade-accounts', TradeAccountController());
   routes.use('/strategies', StrategyController());
+  routes.use('/whale', whaleRoutes);
 
   return routes;
 };
