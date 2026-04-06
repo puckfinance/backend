@@ -91,7 +91,7 @@ export interface AiSignal {
 
 // Configuration
 const WHALE_ALERT_API_URL = 'https://api.whale-alert.io/v1/transactions';
-const WHALE_ALERT_MIN_VALUE = 1000000; // $1M minimum (free tier)
+const WHALE_ALERT_MIN_VALUE = 1000000; // $1M minimum (requires paid API key)
 const BINANCE_API_URL = 'https://api.binance.com/api/v3';
 const BYBIT_API_URL = 'https://api.bybit.com/v5';
 
@@ -101,7 +101,8 @@ const BYBIT_API_URL = 'https://api.bybit.com/v5';
 
 /**
  * Fetch whale alerts from Whale Alert API
- * Free tier: 1 request per minute, transactions > $1M
+ * NOTE: Whale Alert is NOT free - requires paid subscription ($29.95/mo)
+ * Without API key, returns mock data for testing
  */
 export async function fetchWhaleAlerts(
   minValue: number = WHALE_ALERT_MIN_VALUE,
