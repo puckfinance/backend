@@ -27,8 +27,8 @@
     "prepare": "is-ci || husky install || true"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.58",
-    "ai": "^6.0.146",
+    "@ai-sdk/google": "^0.0.36",
+    "ai": "^5.0.0",
     "@prisma/client": "^6.5.0",
     "@types/connect-timeout": "^0.0.39",
     "@types/ws": "^8.18.1",

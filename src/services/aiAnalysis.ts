@@ -10,12 +10,12 @@
 
 import { generateText } from 'ai';
 import { google } from '@ai-sdk/google';
-import { getCoinGeckoMarketData, getTopCoins, getDeFiLlamaProtocols, getTotalDeFiTVL } from './whaleTracker';
-import { getFearAndGreedIndex, getFundingRates, getTechnicalLevels, getMarketSentiment } from './whaleTracker';
+import { getCoinGeckoMarketData, getDeFiLlamaProtocols, getTotalDeFiTVL } from './whaleTracker';
+import { getFearAndGreedIndex, getTechnicalLevels, getMarketSentiment } from './whaleTracker';
 import logger from '../utils/Logger';
 
-// Google Gemini model - Flash 3.0 Preview
-const MODEL_ID = 'gemini-2.0-flash-preview';
+// Google Gemini model - Flash
+const MODEL_ID = 'gemini-2.0-flash';
 
 // =============================================================================
 // AI ANALYSIS TYPES
@@ -106,7 +106,7 @@ async function collectMarketData(symbol: string): Promise<{
     totalTvl: Awaited<ReturnType<typeof getTotalDeFiTVL>>;
   };
 }> {
-  const [marketData, sentiment, technical, fearGreed, defiProtocols, totalTvl] = await Promise.all([
+  const [marketData, sentiment, technical, fearGreedData, defiProtocols, totalTvl] = await Promise.all([
     getCoinGeckoMarketData(symbol),
     getMarketSentiment(symbol),
     getTechnicalLevels(symbol),
@@ -119,7 +119,7 @@ async function collectMarketData(symbol: string): Promise<{
     marketData,
     sentiment,
     technical,
-    fearGreed,
+    fearGreed: fearGreedData,
     defi: {
       protocols: defiProtocols,
       totalTvl,
@@ -214,12 +214,12 @@ export async function getAIAnalysis(symbol: string = 'BTC'): Promise<AIDetailedA
     // Build prompt
     const prompt = buildAnalysisPrompt(symbol, data);
     
-    // Generate analysis using Google Gemini Flash 3.0
+    // Generate analysis using Google Gemini Flash
     const { text } = await generateText({
-      model: google(MODEL_ID),
+      model: google(MODEL_ID) as any,
       prompt,
       temperature: 0.7,
-      maxTokens: 2000,
+      maxOutputTokens: 2000,
     });
 
     // Parse the JSON response
@@ -237,7 +237,7 @@ export async function getAIAnalysis(symbol: string = 'BTC'): Promise<AIDetailedA
       }
     }
 
-    const { marketData, sentiment, technical, fearGreed, defi } = data;
+    const { marketData, sentiment, technical, defi } = data;
     
     // Calculate distance from ATH
     const distanceFromAth = marketData.ath > 0 
@@ -339,7 +339,7 @@ export async function getAIQuickSummary(symbol: string = 'BTC'): Promise<{
     ]);
 
     const { text } = await generateText({
-      model: google(MODEL_ID),
+      model: google(MODEL_ID) as any,
       prompt: `Give a one-sentence trading insight for ${symbol} at $${marketData.price.toLocaleString()}, 
       up ${marketData.priceChangePercentage24h.toFixed(2)}% in 24h.
       Fear & Greed Index is ${fearGreed.value} (${fearGreed.classification}).
@@ -348,7 +348,7 @@ export async function getAIQuickSummary(symbol: string = 'BTC'): Promise<{
       Respond ONLY with a JSON object: {"verdict": "BUY/SELL/NEUTRAL", "confidence": 0-100, "insight": "one sentence explanation"}
       No markdown, just JSON.`,
       temperature: 0.5,
-      maxTokens: 200,
+      maxOutputTokens: 200,
     });
 
     let parsed: any = { verdict: 'NEUTRAL', confidence: 50, insight: 'Analysis unavailable' };
