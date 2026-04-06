@@ -14,8 +14,8 @@ import { getCoinGeckoMarketData, getDeFiLlamaProtocols, getTotalDeFiTVL } from '
 import { getFearAndGreedIndex, getTechnicalLevels, getMarketSentiment } from './whaleTracker';
 import logger from '../utils/Logger';
 
-// Google Gemini model - Flash
-const MODEL_ID = 'gemini-2.0-flash';
+// Google Gemini model - Flash 3.0 Preview
+const MODEL_ID = 'gemini-2.0-flash-preview';
 
 // =============================================================================
 // AI ANALYSIS TYPES
@@ -89,6 +89,18 @@ export interface AIDetailedAnalysis {
     recommendedStrategy: string;
     confidenceScore: number;
     overallVerdict: 'STRONG_BUY' | 'BUY' | 'NEUTRAL' | 'SELL' | 'STRONG_SELL';
+  };
+  
+  // Trade Alert
+  tradeAlert: {
+    active: boolean;
+    direction: 'LONG' | 'SHORT' | 'NONE';
+    entryPrice: number | null;
+    stopLoss: number | null;
+    takeProfit: number | null;
+    riskRewardRatio: number | null;
+    tradeSetup: string;
+    reasoning: string;
   };
 }
 
@@ -196,6 +208,16 @@ Provide your analysis in the following JSON format ONLY (no markdown, no extra t
     "keyLevelToWatch": "Specify a key price level to watch with explanation",
     "recommendedStrategy": "1-2 sentence strategy recommendation",
     "confidenceScore": "A number from 0-100 representing your confidence in this analysis"
+  },
+  "tradeAlert": {
+    "active": "true if there's a clear trade setup, false otherwise",
+    "direction": "LONG or SHORT or NONE - based on current market conditions",
+    "entryPrice": "Suggested entry price (current price if no pullback needed)",
+    "stopLoss": "Stop loss price - should be below support for longs, above resistance for shorts",
+    "takeProfit": "Take profit price - should be at next resistance for longs, next support for shorts",
+    "riskRewardRatio": "Calculate as (TP - Entry) / (Entry - SL). Example: 2.5 means 2.5:1 reward-to-risk",
+    "tradeSetup": "Brief description of the trade setup (e.g., 'Breakout retest', 'Pullback to support')",
+    "reasoning": "1-2 sentence explanation of why this trade makes sense now"
   }
 }
 
@@ -307,6 +329,17 @@ export async function getAIAnalysis(symbol: string = 'BTC'): Promise<AIDetailedA
         recommendedStrategy: parsedAnalysis.summary?.recommendedStrategy || 'Not available',
         confidenceScore: parsedAnalysis.summary?.confidenceScore || 50,
         overallVerdict: parsedAnalysis.summary?.overallVerdict || 'NEUTRAL',
+      },
+      
+      tradeAlert: {
+        active: parsedAnalysis.tradeAlert?.active || false,
+        direction: parsedAnalysis.tradeAlert?.direction || 'NONE',
+        entryPrice: parsedAnalysis.tradeAlert?.entryPrice || null,
+        stopLoss: parsedAnalysis.tradeAlert?.stopLoss || null,
+        takeProfit: parsedAnalysis.tradeAlert?.takeProfit || null,
+        riskRewardRatio: parsedAnalysis.tradeAlert?.riskRewardRatio || null,
+        tradeSetup: parsedAnalysis.tradeAlert?.tradeSetup || 'No active trade setup',
+        reasoning: parsedAnalysis.tradeAlert?.reasoning || 'Market conditions not favorable for trade',
       },
     };
 
