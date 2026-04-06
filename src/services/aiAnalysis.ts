@@ -14,8 +14,8 @@ import { getCoinGeckoMarketData, getDeFiLlamaProtocols, getTotalDeFiTVL } from '
 import { getFearAndGreedIndex, getTechnicalLevels, getMarketSentiment } from './whaleTracker';
 import logger from '../utils/Logger';
 
-// Google Gemini model - Flash 3.0 Preview
-const MODEL_ID = 'gemini-3.0-flash-preview';
+// Google Gemini model
+const MODEL_ID = 'gemini-2.0-flash';
 
 // =============================================================================
 // AI ANALYSIS TYPES
