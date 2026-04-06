@@ -810,34 +810,28 @@ function generateSummary(
 
 /**
  * @deprecated Use getCoinGeckoMarketData instead
+ * Returns market data alerts (volume-based) instead of whale transactions
  */
 export async function fetchWhaleAlerts(
   _minValue: number = 1000000,
   limit: number = 10
 ): Promise<{ alerts: MarketAlert[]; isMock: boolean }> {
-  // Return market-based "alerts" instead of whale transactions
-  try {
-    await getCoinGeckoMarketData();
-    const topCoins = await getTopCoins(limit);
+  const topCoins = await getTopCoins(limit);
 
-    const alerts: MarketAlert[] = topCoins.map((coin, index) => ({
-      id: `market-${coin.id}-${Date.now() - index * 1000}`,
-      timestamp: Date.now() - index * 3600000,
-      blockchain: 'crypto',
-      symbol: coin.symbol,
-      amount: coin.volume24h / coin.price,
-      amountUsd: coin.volume24h,
-      from: { address: 'market', ownerType: 'exchange', owner: 'Market' },
-      to: { address: 'traders', ownerType: 'wallet', owner: 'Traders' },
-      transactionType: 'exchange' as const,
-      exchange: 'Aggregated',
-    }));
+  const alerts: MarketAlert[] = topCoins.map((coin, index) => ({
+    id: `market-${coin.id}-${Date.now() - index * 1000}`,
+    timestamp: Date.now() - index * 3600000,
+    blockchain: 'crypto',
+    symbol: coin.symbol,
+    amount: coin.volume24h / coin.price,
+    amountUsd: coin.volume24h,
+    from: { address: 'market', ownerType: 'exchange', owner: 'Market' },
+    to: { address: 'traders', ownerType: 'wallet', owner: 'Traders' },
+    transactionType: 'exchange' as const,
+    exchange: 'Aggregated',
+  }));
 
-    return { alerts, isMock: false };
-  } catch (error: any) {
-    logger.error('Market alerts error:', error.message);
-    return { alerts: getMockWhaleAlerts(limit), isMock: true };
-  }
+  return { alerts, isMock: false };
 }
 
 /**
@@ -845,77 +839,6 @@ export async function fetchWhaleAlerts(
  */
 export async function getWhaleStats(symbol: string = 'BTC'): Promise<MarketStats> {
   return getMarketStats(symbol);
-}
-
-// =============================================================================
-// MOCK DATA
-// =============================================================================
-
-function getMockWhaleAlerts(count: number): MarketAlert[] {
-  const mockAlerts: MarketAlert[] = [
-    {
-      id: 'mock-1',
-      timestamp: Date.now() - 300000,
-      blockchain: 'bitcoin',
-      symbol: 'BTC',
-      amount: 1250.5,
-      amountUsd: 82500000,
-      from: { address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', ownerType: 'exchange', owner: 'Binance' },
-      to: { address: 'bc1qar0srrr7xfkvyymg4d4s5c6p5fwmlhs5xq5r5y', ownerType: 'wallet', owner: 'Unknown' },
-      transactionType: 'exchange',
-      exchange: 'Binance',
-    },
-    {
-      id: 'mock-2',
-      timestamp: Date.now() - 600000,
-      blockchain: 'bitcoin',
-      symbol: 'BTC',
-      amount: 850.25,
-      amountUsd: 56100000,
-      from: { address: 'bc1qar0srrr7xfkvyymg4d4s5c6p5fwmlhs5xq5r5y', ownerType: 'wallet', owner: 'Whale' },
-      to: { address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', ownerType: 'exchange', owner: 'Coinbase' },
-      transactionType: 'exchange',
-      exchange: 'Coinbase',
-    },
-    {
-      id: 'mock-3',
-      timestamp: Date.now() - 900000,
-      blockchain: 'bitcoin',
-      symbol: 'BTC',
-      amount: 2100.0,
-      amountUsd: 138600000,
-      from: { address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', ownerType: 'exchange', owner: 'Binance' },
-      to: { address: 'bc1qar0srrr7xfkvyymg4d4s5c6p5fwmlhs5xq5r5y', ownerType: 'wallet', owner: 'Unknown' },
-      transactionType: 'exchange',
-      exchange: 'Binance',
-    },
-    {
-      id: 'mock-4',
-      timestamp: Date.now() - 1200000,
-      blockchain: 'bitcoin',
-      symbol: 'BTC',
-      amount: 450.75,
-      amountUsd: 29750000,
-      from: { address: 'bc1qar0srrr7xfkvyymg4d4s5c6p5fwmlhs5xq5r5y', ownerType: 'wallet', owner: 'OTC' },
-      to: { address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', ownerType: 'exchange', owner: 'Kraken' },
-      transactionType: 'exchange',
-      exchange: 'Kraken',
-    },
-    {
-      id: 'mock-5',
-      timestamp: Date.now() - 1800000,
-      blockchain: 'ethereum',
-      symbol: 'ETH',
-      amount: 8500.0,
-      amountUsd: 14450000,
-      from: { address: '0x28C6c06298d514Db089934071355E5743bf21d60', ownerType: 'exchange', owner: 'Coinbase' },
-      to: { address: '0x21a31Ee1afC51d94C2EfCCa3aD2a4E3F2b5aBcde', ownerType: 'wallet', owner: 'DeFi' },
-      transactionType: 'exchange',
-      exchange: 'Coinbase',
-    },
-  ];
-
-  return mockAlerts.slice(0, count);
 }
 
 // =============================================================================
