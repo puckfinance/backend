@@ -113,6 +113,30 @@ const BYBIT_API_URL = 'https://api.bybit.com/v5';
 // COINGECKO - Market Data (PRICES, VOLUME, MARKET CAP, OHLCV)
 // =============================================================================
 
+// Symbol to CoinGecko ID mapping
+const SYMBOL_TO_ID: Record<string, string> = {
+  BTC: 'bitcoin',
+  ETH: 'ethereum',
+  USDT: 'tether',
+  BNB: 'binancecoin',
+  SOL: 'solana',
+  XRP: 'ripple',
+  USDC: 'usd-coin',
+  ADA: 'cardano',
+  AVAX: 'avalanche-2',
+  DOGE: 'dogecoin',
+  DOT: 'polkadot',
+  TRX: 'tron',
+  LINK: 'chainlink',
+  MATIC: 'matic-network',
+  TON: 'the-open-network',
+  SHIB: 'shiba-inu',
+  LTC: 'litecoin',
+  BCH: 'bitcoin-cash',
+  UNI: 'uniswap',
+  ATOM: 'cosmos',
+};
+
 /**
  * Get market data from CoinGecko (FREE - no API key required for basic endpoints)
  * Provides: current price, market cap, volume, price change %
@@ -131,7 +155,10 @@ export async function getCoinGeckoMarketData(symbol: string = 'bitcoin'): Promis
   athDate: string;
 }> {
   try {
-    const response = await axios.get(`${COINGECKO_API_URL}/coins/${symbol}`, {
+    // Convert symbol to CoinGecko ID (e.g., 'BTC' -> 'bitcoin')
+    const coinId = SYMBOL_TO_ID[symbol.toUpperCase()] || symbol.toLowerCase();
+
+    const response = await axios.get(`${COINGECKO_API_URL}/coins/${coinId}`, {
       params: {
         localization: false,
         tickers: false,
@@ -281,7 +308,7 @@ export async function getDeFiLlamaProtocols(limit: number = 20): Promise<DeFiPro
 }
 
 /**
- * Get total DeFi TVL
+ * Get total DeFi TVL - calculated from protocols sum since /tvl endpoint is unreliable
  */
 export async function getTotalDeFiTVL(): Promise<{
   totalTvl: number;
@@ -289,13 +316,22 @@ export async function getTotalDeFiTVL(): Promise<{
   change7d: number;
 }> {
   try {
-    const response = await axios.get(`${DEFI_LLAMA_API_URL}/tvl`, {
+    // /tvl endpoint returns empty, so we sum from protocols
+    const response = await axios.get(`${DEFI_LLAMA_API_URL}/protocols`, {
       timeout: 10000,
     });
 
+    // Sum all protocol TVLs
+    let totalTvl = 0;
+    for (const protocol of response.data) {
+      if (protocol.tvl && typeof protocol.tvl === 'number') {
+        totalTvl += protocol.tvl;
+      }
+    }
+
     return {
-      totalTvl: response.data,
-      change24h: 0, // DeFiLlama /tvl doesn't provide change directly
+      totalTvl,
+      change24h: 0,
       change7d: 0,
     };
   } catch (error: any) {
@@ -448,7 +484,7 @@ export async function getExchangeFlows(symbol: string = 'BTC'): Promise<Exchange
   // Without whale alert API, we estimate from trading volume
   // This is a simplified estimation based on market activity
   try {
-    const [marketData, topCoins] = await Promise.all([
+    const [marketData, _topCoins] = await Promise.all([
       getCoinGeckoMarketData(symbol),
       getTopCoins(5),
     ]);
@@ -519,8 +555,8 @@ export async function getTechnicalLevels(symbol: string = 'BTC'): Promise<{
 
 export async function getMarketStats(symbol: string = 'BTC'): Promise<MarketStats> {
   try {
-    const marketData = await getCoinGeckoMarketData(symbol.toLowerCase());
-    const totalTvl = await getTotalDeFiTVL();
+    const marketData = await getCoinGeckoMarketData(symbol);
+    await getTotalDeFiTVL(); // Fetched for potential future use
 
     // Estimate whale-like activity from volume
     // Large 24h volume relative to market cap = whale activity
@@ -551,7 +587,7 @@ export async function getMarketStats(symbol: string = 'BTC'): Promise<MarketStat
 // =============================================================================
 
 export async function getMarketSentiment(symbol: string = 'BTC'): Promise<MarketSentiment> {
-  const [fearGreed, funding, oiRatio, defiTvl] = await Promise.all([
+  const [fearGreed, funding, oiRatio, _defiTvl] = await Promise.all([
     getFearAndGreedIndex(),
     getFundingRates(symbol),
     getOpenInterestAndRatio(symbol),
@@ -738,8 +774,8 @@ export async function getComprehensiveAnalysis(symbol: string = 'BTC'): Promise<
 }
 
 function generateSummary(
-  symbol: string,
-  marketStats: MarketStats,
+  _symbol: string,
+  _marketStats: MarketStats,
   sentiment: MarketSentiment,
   signals: AiSignal[],
   techLevels: { currentPrice: number; dailyHigh: number; dailyLow: number },
@@ -776,12 +812,12 @@ function generateSummary(
  * @deprecated Use getCoinGeckoMarketData instead
  */
 export async function fetchWhaleAlerts(
-  minValue: number = 1000000,
+  _minValue: number = 1000000,
   limit: number = 10
 ): Promise<{ alerts: MarketAlert[]; isMock: boolean }> {
   // Return market-based "alerts" instead of whale transactions
   try {
-    const marketData = await getCoinGeckoMarketData();
+    await getCoinGeckoMarketData();
     const topCoins = await getTopCoins(limit);
 
     const alerts: MarketAlert[] = topCoins.map((coin, index) => ({
