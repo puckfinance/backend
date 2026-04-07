@@ -489,35 +489,21 @@ export async function getOpenInterestAndRatio(symbol: string = 'BTC'): Promise<{
 // =============================================================================
 
 export async function getExchangeFlows(symbol: string = 'BTC'): Promise<ExchangeFlow[]> {
-  // Without whale alert API, we estimate from trading volume
-  // This is a simplified estimation based on market activity
   try {
-    const [marketData, _topCoins] = await Promise.all([
-      getCoinGeckoMarketData(symbol),
-      getTopCoins(5),
-    ]);
-
-    // Estimate flows based on volume distribution
+    const marketData = await getCoinGeckoMarketData(symbol);
     const totalVolume = marketData.volume24h;
     const exchanges = ['Binance', 'Coinbase', 'Kraken', 'OKX', 'Bybit'];
-    const flowData: ExchangeFlow[] = [];
-
-    // Distribute volume across exchanges (rough estimation)
-    const distribution = [0.35, 0.20, 0.10, 0.15, 0.20]; // Binance dominant
-    for (let i = 0; i < exchanges.length; i++) {
+    const distribution = [0.35, 0.20, 0.10, 0.15, 0.20];
+    return exchanges.map((ex, i) => {
       const vol = totalVolume * distribution[i];
-      // Positive net flow = more selling (assumption)
-      const netFlow = vol * (Math.random() * 0.1 - 0.05); // ±5% variance
-      flowData.push({
-        exchange: exchanges[i],
+      return {
+        exchange: ex,
         inflow24h: vol * 0.5,
         outflow24h: vol * 0.5,
-        netFlow: netFlow,
+        netFlow: 0,
         velocity: vol,
-      });
-    }
-
-    return flowData;
+      };
+    });
   } catch (error: any) {
     logger.error('Exchange flows error:', error.message);
     return [];
@@ -525,8 +511,289 @@ export async function getExchangeFlows(symbol: string = 'BTC'): Promise<Exchange
 }
 
 // =============================================================================
-// TECHNICAL LEVELS
+// REAL WHALE ACTIVITY DATA (from Binance Futures + Blockchain.info)
 // =============================================================================
+
+export interface WhaleActivity {
+  // Taker buy/sell ratio (shows whale aggression direction)
+  takerBuySellRatio: {
+    latest: number;        // >1 = aggressive buying, <1 = aggressive selling
+    avg24h: number;
+    trend: 'buying' | 'selling' | 'neutral';
+    hourlyData: Array<{ timestamp: number; ratio: number; buyVol: number; sellVol: number }>;
+  };
+  // Top trader positioning (pro/whale traders on Binance)
+  topTraderPositions: {
+    longAccountRatio: number;   // % of top traders that are long
+    shortAccountRatio: number;
+    longShortRatio: number;
+    trend24h: 'increasing_longs' | 'increasing_shorts' | 'stable';
+    hourlyData: Array<{ timestamp: number; longRatio: number; shortRatio: number }>;
+  };
+  // Open interest changes (money flow in/out of futures)
+  openInterestFlow: {
+    currentOI: number;          // in BTC
+    currentOIValue: number;     // in USD
+    change24h: number;          // % change
+    trend: 'increasing' | 'decreasing' | 'stable';
+    hourlyData: Array<{ timestamp: number; oi: number; oiValue: number }>;
+  };
+  // On-chain whale transactions (BTC only, from blockchain.info)
+  onChainWhales: {
+    largeTransactions: number;  // count of >10 BTC unconfirmed txs
+    totalVolumeBTC: number;
+    avgTransactionBTC: number;
+    interpretation: string;
+  };
+}
+
+async function getTakerBuySellRatio(symbol: string): Promise<WhaleActivity['takerBuySellRatio']> {
+  try {
+    const { data } = await axios.get(`${BINANCE_FUTURES_API_URL.replace('/fapi/v1', '')}/futures/data/takerlongshortRatio`, {
+      params: { symbol: `${symbol}USDT`, period: '1h', limit: 24 },
+      timeout: 10000,
+    });
+    const entries = (data || []).map((r: any) => ({
+      timestamp: r.timestamp,
+      ratio: parseFloat(r.buySellRatio),
+      buyVol: parseFloat(r.buyVol),
+      sellVol: parseFloat(r.sellVol),
+    }));
+    const latest = entries.length > 0 ? entries[entries.length - 1].ratio : 1;
+    const avg = entries.length > 0 ? entries.reduce((s: number, e: any) => s + e.ratio, 0) / entries.length : 1;
+    const trend = avg > 1.05 ? 'buying' as const : avg < 0.95 ? 'selling' as const : 'neutral' as const;
+    return { latest, avg24h: parseFloat(avg.toFixed(3)), trend, hourlyData: entries };
+  } catch (error: any) {
+    logger.error('Taker buy/sell ratio error:', error.message);
+    return { latest: 1, avg24h: 1, trend: 'neutral', hourlyData: [] };
+  }
+}
+
+async function getTopTraderPositions(symbol: string): Promise<WhaleActivity['topTraderPositions']> {
+  try {
+    const { data } = await axios.get(`${BINANCE_FUTURES_API_URL.replace('/fapi/v1', '')}/futures/data/topLongShortPositionRatio`, {
+      params: { symbol: `${symbol}USDT`, period: '1h', limit: 24 },
+      timeout: 10000,
+    });
+    const entries = (data || []).map((r: any) => ({
+      timestamp: r.timestamp,
+      longRatio: parseFloat(r.longAccount),
+      shortRatio: parseFloat(r.shortAccount),
+    }));
+    const latest = entries.length > 0 ? entries[entries.length - 1] : { longRatio: 0.5, shortRatio: 0.5 };
+    const first = entries.length > 0 ? entries[0] : latest;
+    const longChange = latest.longRatio - first.longRatio;
+    const trend = longChange > 0.02 ? 'increasing_longs' as const :
+                  longChange < -0.02 ? 'increasing_shorts' as const : 'stable' as const;
+    return {
+      longAccountRatio: latest.longRatio,
+      shortAccountRatio: latest.shortRatio,
+      longShortRatio: parseFloat((latest.longRatio / latest.shortRatio).toFixed(3)),
+      trend24h: trend,
+      hourlyData: entries,
+    };
+  } catch (error: any) {
+    logger.error('Top trader positions error:', error.message);
+    return { longAccountRatio: 0.5, shortAccountRatio: 0.5, longShortRatio: 1, trend24h: 'stable', hourlyData: [] };
+  }
+}
+
+async function getOpenInterestHistory(symbol: string): Promise<WhaleActivity['openInterestFlow']> {
+  try {
+    const { data } = await axios.get(`${BINANCE_FUTURES_API_URL.replace('/fapi/v1', '')}/futures/data/openInterestHist`, {
+      params: { symbol: `${symbol}USDT`, period: '1h', limit: 24 },
+      timeout: 10000,
+    });
+    const entries = (data || []).map((r: any) => ({
+      timestamp: r.timestamp,
+      oi: parseFloat(r.sumOpenInterest),
+      oiValue: parseFloat(r.sumOpenInterestValue),
+    }));
+    const current = entries.length > 0 ? entries[entries.length - 1] : { oi: 0, oiValue: 0 };
+    const first = entries.length > 0 ? entries[0] : current;
+    const change = first.oiValue > 0 ? ((current.oiValue - first.oiValue) / first.oiValue) * 100 : 0;
+    const trend = change > 3 ? 'increasing' as const : change < -3 ? 'decreasing' as const : 'stable' as const;
+    return {
+      currentOI: current.oi,
+      currentOIValue: current.oiValue,
+      change24h: parseFloat(change.toFixed(2)),
+      trend,
+      hourlyData: entries,
+    };
+  } catch (error: any) {
+    logger.error('Open interest history error:', error.message);
+    return { currentOI: 0, currentOIValue: 0, change24h: 0, trend: 'stable', hourlyData: [] };
+  }
+}
+
+async function getOnChainWhaleTransactions(): Promise<WhaleActivity['onChainWhales']> {
+  try {
+    const { data } = await axios.get('https://blockchain.info/unconfirmed-transactions?format=json', {
+      timeout: 15000,
+    });
+    const txs = data.txs || [];
+    // Filter for large transactions (>10 BTC = >1,000,000,000 satoshis)
+    const largeTxs = txs.filter((t: any) =>
+      (t.out || []).some((o: any) => (o.value || 0) > 1_000_000_000)
+    );
+    const totalBTC = largeTxs.reduce((sum: number, t: any) => {
+      const txTotal = (t.out || []).reduce((s: number, o: any) => s + (o.value || 0), 0);
+      return sum + txTotal / 1e8;
+    }, 0);
+    const avgBTC = largeTxs.length > 0 ? totalBTC / largeTxs.length : 0;
+
+    let interpretation = 'Normal on-chain activity';
+    if (largeTxs.length >= 10) interpretation = 'High whale activity - significant large transactions in mempool';
+    else if (largeTxs.length >= 5) interpretation = 'Moderate whale activity - several large transactions detected';
+    else if (largeTxs.length >= 1) interpretation = 'Low whale activity - few large transactions';
+
+    return {
+      largeTransactions: largeTxs.length,
+      totalVolumeBTC: parseFloat(totalBTC.toFixed(2)),
+      avgTransactionBTC: parseFloat(avgBTC.toFixed(2)),
+      interpretation,
+    };
+  } catch (error: any) {
+    logger.error('On-chain whale detection error:', error.message);
+    return { largeTransactions: 0, totalVolumeBTC: 0, avgTransactionBTC: 0, interpretation: 'Data unavailable' };
+  }
+}
+
+export async function getWhaleActivity(symbol: string = 'BTC'): Promise<WhaleActivity> {
+  const [takerRatio, topTraders, oiFlow, onChain] = await Promise.all([
+    getTakerBuySellRatio(symbol),
+    getTopTraderPositions(symbol),
+    getOpenInterestHistory(symbol),
+    symbol === 'BTC' ? getOnChainWhaleTransactions() : Promise.resolve({
+      largeTransactions: 0, totalVolumeBTC: 0, avgTransactionBTC: 0,
+      interpretation: 'On-chain tracking only available for BTC',
+    }),
+  ]);
+
+  return {
+    takerBuySellRatio: takerRatio,
+    topTraderPositions: topTraders,
+    openInterestFlow: oiFlow,
+    onChainWhales: onChain,
+  };
+}
+
+// =============================================================================
+// TECHNICAL LEVELS (Multi-timeframe from Binance Klines)
+// =============================================================================
+
+interface SwingLevel {
+  price: number;
+  type: 'support' | 'resistance';
+  strength: number; // how many times tested
+  timeframe: string;
+}
+
+interface PivotPoints {
+  pivot: number;
+  r1: number;
+  r2: number;
+  r3: number;
+  s1: number;
+  s2: number;
+  s3: number;
+}
+
+interface Candle {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  time: number;
+}
+
+// Fetch klines from Binance
+async function getKlines(symbol: string, interval: string, limit: number): Promise<Candle[]> {
+  try {
+    const response = await axios.get(`${BINANCE_API_URL}/klines`, {
+      params: { symbol: `${symbol}USDT`, interval, limit },
+      timeout: 10000,
+    });
+    return (response.data || []).map((k: any[]) => ({
+      open: parseFloat(k[1]),
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3]),
+      close: parseFloat(k[4]),
+      volume: parseFloat(k[5]),
+      time: k[0],
+    }));
+  } catch (error: any) {
+    logger.error(`Klines fetch error (${interval}):`, error.message);
+    return [];
+  }
+}
+
+// Find swing highs and lows (local maxima/minima)
+function findSwingLevels(candles: Candle[], lookback: number = 3, timeframe: string = '1d'): SwingLevel[] {
+  const levels: SwingLevel[] = [];
+  if (candles.length < lookback * 2 + 1) return levels;
+
+  for (let i = lookback; i < candles.length - lookback; i++) {
+    // Swing high: higher high than surrounding candles
+    let isSwingHigh = true;
+    let isSwingLow = true;
+
+    for (let j = 1; j <= lookback; j++) {
+      if (candles[i].high <= candles[i - j].high || candles[i].high <= candles[i + j].high) {
+        isSwingHigh = false;
+      }
+      if (candles[i].low >= candles[i - j].low || candles[i].low >= candles[i + j].low) {
+        isSwingLow = false;
+      }
+    }
+
+    if (isSwingHigh) {
+      levels.push({ price: candles[i].high, type: 'resistance', strength: 1, timeframe });
+    }
+    if (isSwingLow) {
+      levels.push({ price: candles[i].low, type: 'support', strength: 1, timeframe });
+    }
+  }
+
+  return levels;
+}
+
+// Cluster nearby levels (within tolerance %) and count strength
+function clusterLevels(levels: SwingLevel[], tolerancePercent: number = 1.0): SwingLevel[] {
+  if (levels.length === 0) return [];
+
+  const sorted = [...levels].sort((a, b) => a.price - b.price);
+  const clusters: SwingLevel[] = [];
+
+  let current = { ...sorted[0] };
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = Math.abs(sorted[i].price - current.price) / current.price * 100;
+    if (diff <= tolerancePercent) {
+      // Merge into cluster
+      current.strength += sorted[i].strength;
+      current.price = (current.price + sorted[i].price) / 2; // average
+    } else {
+      clusters.push(current);
+      current = { ...sorted[i] };
+    }
+  }
+  clusters.push(current);
+
+  return clusters.sort((a, b) => b.strength - a.strength);
+}
+
+// Classic floor trader pivot points from previous day's OHLC
+function calculatePivotPoints(prevHigh: number, prevLow: number, prevClose: number): PivotPoints {
+  const pivot = (prevHigh + prevLow + prevClose) / 3;
+  const r1 = 2 * pivot - prevLow;
+  const s1 = 2 * pivot - prevHigh;
+  const r2 = pivot + (prevHigh - prevLow);
+  const s2 = pivot - (prevHigh - prevLow);
+  const r3 = prevHigh + 2 * (pivot - prevLow);
+  const s3 = prevLow - 2 * (prevHigh - pivot);
+  return { pivot, r1, r2, r3, s1, s2, s3 };
+}
 
 export async function getTechnicalLevels(symbol: string = 'BTC'): Promise<{
   currentPrice: number;
@@ -534,26 +801,71 @@ export async function getTechnicalLevels(symbol: string = 'BTC'): Promise<{
   dailyLow: number;
   keySupport: number;
   keyResistance: number;
+  // Extended data
+  pivotPoints: PivotPoints;
+  swingLevels: SwingLevel[];
+  recentCandles: { timeframe: string; candles: Candle[] }[];
 }> {
   try {
-    const response = await axios.get(`${BINANCE_API_URL}/ticker/24hr`, {
-      params: { symbol: `${symbol}USDT` },
-      timeout: 10000,
-    });
+    // Fetch multiple timeframes in parallel
+    const [ticker, daily, h4, h1] = await Promise.all([
+      axios.get(`${BINANCE_API_URL}/ticker/24hr`, {
+        params: { symbol: `${symbol}USDT` },
+        timeout: 10000,
+      }),
+      getKlines(symbol, '1d', 250),  // 250 days (enough for EMA 200)
+      getKlines(symbol, '4h', 100),  // ~16 days of 4h
+      getKlines(symbol, '1h', 200),  // ~8 days of 1h (enough for EMA 200)
+    ]);
 
-    const data = response.data;
+    const data = ticker.data;
     const currentPrice = parseFloat(data?.lastPrice || '0');
     const dailyHigh = parseFloat(data?.highPrice || '0');
     const dailyLow = parseFloat(data?.lowPrice || '0');
 
-    const volatility = dailyHigh - dailyLow;
-    const keySupport = dailyLow + (volatility * 0.236);
-    const keyResistance = dailyHigh - (volatility * 0.236);
+    // Calculate pivot points from previous day's candle
+    const prevDay = daily.length >= 2 ? daily[daily.length - 2] : null;
+    const pivotPoints = prevDay
+      ? calculatePivotPoints(prevDay.high, prevDay.low, prevDay.close)
+      : calculatePivotPoints(dailyHigh, dailyLow, currentPrice);
 
-    return { currentPrice, dailyHigh, dailyLow, keySupport, keyResistance };
+    // Find swing levels across timeframes
+    const dailySwings = findSwingLevels(daily, 2, '1d');
+    const h4Swings = findSwingLevels(h4, 3, '4h');
+    const h1Swings = findSwingLevels(h1, 3, '1h');
+
+    const allSwings = [...dailySwings, ...h4Swings, ...h1Swings];
+    const clustered = clusterLevels(allSwings, 1.5);
+
+    // Pick strongest support below price and resistance above
+    const supports = clustered.filter((l) => l.price < currentPrice).sort((a, b) => b.price - a.price);
+    const resistances = clustered.filter((l) => l.price > currentPrice).sort((a, b) => a.price - b.price);
+
+    const keySupport = supports.length > 0 ? supports[0].price : pivotPoints.s1;
+    const keyResistance = resistances.length > 0 ? resistances[0].price : pivotPoints.r1;
+
+    return {
+      currentPrice,
+      dailyHigh,
+      dailyLow,
+      keySupport,
+      keyResistance,
+      pivotPoints,
+      swingLevels: clustered.slice(0, 10), // top 10 strongest levels
+      recentCandles: [
+        { timeframe: '1d', candles: daily },
+        { timeframe: '4h', candles: h4 },
+        { timeframe: '1h', candles: h1 },
+      ],
+    };
   } catch (error: any) {
     logger.error('Technical levels fetch error:', error.message);
-    return { currentPrice: 0, dailyHigh: 0, dailyLow: 0, keySupport: 0, keyResistance: 0 };
+    const emptyPivots = { pivot: 0, r1: 0, r2: 0, r3: 0, s1: 0, s2: 0, s3: 0 };
+    return {
+      currentPrice: 0, dailyHigh: 0, dailyLow: 0,
+      keySupport: 0, keyResistance: 0,
+      pivotPoints: emptyPivots, swingLevels: [], recentCandles: [],
+    };
   }
 }
 
