@@ -182,7 +182,7 @@ const entryOptimized = async ({
   };
 
   // Execute entry order first (critical timing)
-  const executedEntryOrder = await client.futuresOrder(entryOrder);
+  const executedEntryOrder = await client.futuresOrder(entryOrder) as any;
   console.log(`ENTRY`, { executedEntryOrder });
 
   const origQty = parseFloat(executedEntryOrder.origQty);
