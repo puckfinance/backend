@@ -79,6 +79,7 @@ enum TradeSide {
 enum Provider {
   BINANCE
   BYBIT
+  MEXC
 }
 
 model MarketAnalysis {
