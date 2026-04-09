@@ -2,6 +2,7 @@ import { Router } from 'express';
 import UserController from '../controllers/UserController';
 import BinanceController from '../controllers/BinanceController';
 import BybitController from '../controllers/BybitController';
+import MexcController from '../controllers/MexcController';
 import TradeAccountController from '../controllers/TradeAccountController';
 import StrategyController from '../controllers/StrategyController';
 import MarketAnalysisHistoryController from '../controllers/MarketAnalysisHistoryController';
@@ -23,6 +24,7 @@ export default () => {
   routes.use('/users', UserController());
   routes.use('/binance', BinanceController());
   routes.use('/bybit', BybitController());
+  routes.use('/mexc', MexcController());
   routes.use('/trade-accounts', TradeAccountController());
   routes.use('/strategies', StrategyController());
   routes.use('/whale', whaleRoutes);
