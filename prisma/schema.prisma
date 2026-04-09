@@ -19,8 +19,9 @@ model User {
   password  String
   TradeLog  TradeLog[]
 
-  TradeAccount TradeAccount[]
-  Strategy     Strategy[]
+  TradeAccount    TradeAccount[]
+  Strategy        Strategy[]
+  MarketAnalysis  MarketAnalysis[]
 }
 
 model TradeLog {
@@ -78,4 +79,98 @@ enum TradeSide {
 enum Provider {
   BINANCE
   BYBIT
+}
+
+model MarketAnalysis {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Core identifiers
+  symbol    String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+
+  // Market Overview
+  price                    Float
+  priceChange24h           Float
+  priceChangePercentage24h Float
+  marketCap                Float
+  volume24h                Float
+  circulatingSupply        Float
+  ath                      Float
+  athDate                  String
+  distanceFromAth          Float
+
+  // DXY / Macro
+  dxyPrice     Float?
+  eurusd       Float?
+  gbpusd       Float?
+  usdjpy       Float?
+  macroEvents  Json?    // Array of upcoming macro events
+
+  // Technical Levels
+  keySupport     Float
+  keyResistance  Float
+  dailyHigh      Float
+  dailyLow       Float
+
+  // Sentiment
+  fearGreedIndex         Int
+  fearGreedClassification String
+  fundingRate            Float
+  longShortRatio         Float
+  marketBias             String
+
+  // Whale Activity
+  whaleData Json?   // Full whale activity snapshot
+
+  // Technical Indicators (daily primary)
+  rsi              Float
+  rsiCondition     String
+  macdHistogram    Float
+  macdTrend        String
+  emaTrend         String
+  marketStructure  String
+  bollingerSqueeze Boolean
+  bollingerPercentB Float
+  atr              Float
+  vwapRelation     String
+
+  // Full indicator suite per timeframe
+  indicators Json?   // Complete IndicatorSuite for 1d, 4h, 1h
+
+  // DeFi Context
+  defiTvl       Float?
+  defiProtocols Json?   // Top 5 protocols
+  defiHealth    String?
+
+  // AI Analysis (the markdown text from streaming)
+  analysisText String?   // Full AI-generated markdown analysis
+
+  // AI Insights
+  aiInsights Json?    // { keyObservations, riskFactors, opportunities, tradingConsiderations }
+
+  // Summary & Verdict
+  shortTermOutlook    String?
+  mediumTermOutlook   String?
+  keyLevelToWatch     String?
+  recommendedStrategy String?
+  confidenceScore     Float?
+  overallVerdict      String?   // STRONG_BUY | BUY | NEUTRAL | SELL | STRONG_SELL
+
+  // Trade Alert
+  tradeAlertActive     Boolean?
+  tradeAlertDirection  String?
+  tradeAlertEntryPrice Float?
+  tradeAlertStopLoss   Float?
+  tradeAlertTakeProfit Float?
+  tradeAlertRiskReward Float?
+  tradeAlertSetup      String?
+  tradeAlertReasoning  String?
+
+  @@index([symbol])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([symbol, createdAt])
 }

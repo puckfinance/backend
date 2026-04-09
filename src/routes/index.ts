@@ -4,6 +4,7 @@ import BinanceController from '../controllers/BinanceController';
 import BybitController from '../controllers/BybitController';
 import TradeAccountController from '../controllers/TradeAccountController';
 import StrategyController from '../controllers/StrategyController';
+import MarketAnalysisHistoryController from '../controllers/MarketAnalysisHistoryController';
 import authRoutes from './auth.routes';
 import whaleRoutes from './whale.routes';
 import aiRoutes from './ai.routes';
@@ -26,6 +27,7 @@ export default () => {
   routes.use('/strategies', StrategyController());
   routes.use('/whale', whaleRoutes);
   routes.use('/ai', aiRoutes);
+  routes.use('/analysis-history', MarketAnalysisHistoryController());
 
   return routes;
 };
