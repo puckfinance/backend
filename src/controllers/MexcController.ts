@@ -259,30 +259,34 @@ class MexcController {
                 takeprofitAmount: number;
             };
 
-            const extendedPositions: ExtendedPosition[] = positions.map((position) => {
-                const stopOrder = stopOrders.find(
-                    (order) => order.symbol === position.symbol && String(order.positionId) === String(position.positionId),
-                );
+            const extendedPositions: ExtendedPosition[] = await Promise.all(
+                positions.map(async (position) => {
+                    const stopOrder = stopOrders.find(
+                        (order) => order.symbol === position.symbol && String(order.positionId) === String(position.positionId),
+                    );
 
-                const stoploss = stopOrder?.stopLossPrice?.toString() || '';
-                const takeprofit = stopOrder?.takeProfitPrice?.toString() || '';
+                    const stoploss = stopOrder?.stopLossPrice?.toString() || '';
+                    const takeprofit = stopOrder?.takeProfitPrice?.toString() || '';
 
-                const size = position.holdVol;
-                const entryPrice = Number(position.holdAvgPrice);
+                    const contractInfo = await MexcFunctions.getContractInfo(client, position.symbol);
+                    const contractSizeNum = parseFloat(contractInfo.contractSize);
+                    const size = position.holdVol * contractSizeNum;
+                    const entryPrice = Number(position.holdAvgPrice);
 
-                const stoplossAmount = stoploss ? Number(stoploss) * size - entryPrice * size : 0;
-                const takeprofitAmount = takeprofit ? Number(takeprofit) * size - entryPrice * size : 0;
+                    const stoplossAmount = stoploss ? Number(stoploss) * size - entryPrice * size : 0;
+                    const takeprofitAmount = takeprofit ? Number(takeprofit) * size - entryPrice * size : 0;
 
-                const extendedPosition: ExtendedPosition = {
-                    ...position,
-                    stoploss,
-                    takeprofit,
-                    stoplossAmount,
-                    takeprofitAmount,
-                };
+                    const extendedPosition: ExtendedPosition = {
+                        ...position,
+                        stoploss,
+                        takeprofit,
+                        stoplossAmount,
+                        takeprofitAmount,
+                    };
 
-                return extendedPosition;
-            });
+                    return extendedPosition;
+                }),
+            );
 
             res.status(200).json(extendedPositions);
         } catch (error: any) {

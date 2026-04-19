@@ -10,7 +10,7 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis } from '../services/aiAnalysis';
+import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis, extractTradeAlert } from '../services/aiAnalysis';
 import { saveAnalysis } from '../services/analysisHistory';
 import logger from '../utils/Logger';
 import Log from '../services/log';
@@ -110,6 +110,12 @@ export default () => {
         fullAnalysisText += chunk;
         res.write(`data: ${JSON.stringify({ type: 'text-delta', data: chunk })}\n\n`);
       }
+
+      // Parse trade alert from the completed analysis text using structured AI output
+      const tradeAlert = await extractTradeAlert(fullAnalysisText);
+
+      // Send trade alert event before done
+      res.write(`data: ${JSON.stringify({ type: 'trade-alert', data: tradeAlert })}\n\n`);
 
       // Send completion event with the saved analysis ID
       const savedId = await saveAnalysis({

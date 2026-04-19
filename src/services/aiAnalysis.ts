@@ -317,14 +317,14 @@ export async function getAIAnalysis(symbol: string = 'BTC'): Promise<AIDetailedA
     const prompt = buildAnalysisPrompt(symbol, data);
 
     // Generate structured analysis using generateText with Output API
-    const { output: parsedAnalysis } = await generateText({
+    const { output: parsedAnalysis } = (await generateText({
       model: google(MODEL_ID),
       output: Output.object({
         schema: AIAnalysisResponseSchema as any,
       }),
       prompt,
-      temperature: 0.7,
-    }) as { output: z.infer<typeof AIAnalysisResponseSchema> };
+      temperature: 0,
+    })) as { output: z.infer<typeof AIAnalysisResponseSchema> };
 
     // Build response
     const analysis: AIDetailedAnalysis = {
@@ -441,7 +441,7 @@ export async function getAIQuickSummary(symbol: string = 'BTC'): Promise<{
       getMarketSentiment(symbol),
     ]);
 
-    const { output: parsed } = await generateText({
+    const { output: parsed } = (await generateText({
       model: google(MODEL_ID),
       output: Output.object({
         schema: QuickSummarySchema as any,
@@ -453,7 +453,7 @@ export async function getAIQuickSummary(symbol: string = 'BTC'): Promise<{
 
       Respond with a JSON object with verdict (STRONG_BUY/BUY/NEUTRAL/SELL/STRONG_SELL), confidence (0-100), and insight (one sentence).`,
       temperature: 0.5,
-    }) as { output: z.infer<typeof QuickSummarySchema> };
+    })) as { output: z.infer<typeof QuickSummarySchema> };
 
     return {
       symbol,
@@ -480,16 +480,49 @@ import type { TimeframeIndicators } from './technicalIndicators';
 function formatTimeframe(tf: TimeframeIndicators, _currentPrice: number): string {
   const label = tf.timeframe.toUpperCase();
   return `### ${label} Timeframe
-- **EMA Trend**: ${tf.emaTrend.replace('_', ' ').toUpperCase()} | EMA 9: $${tf.ema9.value.toLocaleString()} | 21: $${tf.ema21.value.toLocaleString()} | 50: $${tf.ema50.value.toLocaleString()} | 200: $${tf.ema200.value.toLocaleString()}
-- **RSI (14)**: ${tf.rsi.value} — ${tf.rsi.condition.toUpperCase()}${tf.rsi.value > 70 ? ' ⚠️ OVERBOUGHT' : tf.rsi.value < 30 ? ' ⚠️ OVERSOLD' : ''}
-- **MACD**: Histogram ${tf.macd.histogram} (${tf.macd.trend.toUpperCase()})${tf.macd.histogramFlipping ? ' 🔄 FLIPPING' : ''} | Line: ${tf.macd.macdLine} Signal: ${tf.macd.signalLine}
-- **BBands**: Upper $${tf.bollinger.upper.toLocaleString()} | Mid $${tf.bollinger.middle.toLocaleString()} | Lower $${tf.bollinger.lower.toLocaleString()} | %B: ${(tf.bollinger.percentB * 100).toFixed(0)}%${tf.bollinger.squeeze ? ' 🔥 SQUEEZE' : ''}
+- **EMA Trend**: ${tf.emaTrend
+    .replace('_', ' ')
+    .toUpperCase()} | EMA 9: $${tf.ema9.value.toLocaleString()} | 21: $${tf.ema21.value.toLocaleString()} | 50: $${tf.ema50.value.toLocaleString()} | 200: $${tf.ema200.value.toLocaleString()}
+- **RSI (14)**: ${tf.rsi.value} — ${tf.rsi.condition.toUpperCase()}${
+    tf.rsi.value > 70 ? ' ⚠️ OVERBOUGHT' : tf.rsi.value < 30 ? ' ⚠️ OVERSOLD' : ''
+  }
+- **MACD**: Histogram ${tf.macd.histogram} (${tf.macd.trend.toUpperCase()})${
+    tf.macd.histogramFlipping ? ' 🔄 FLIPPING' : ''
+  } | Line: ${tf.macd.macdLine} Signal: ${tf.macd.signalLine}
+- **BBands**: Upper $${tf.bollinger.upper.toLocaleString()} | Mid $${tf.bollinger.middle.toLocaleString()} | Lower $${tf.bollinger.lower.toLocaleString()} | %B: ${(
+    tf.bollinger.percentB * 100
+  ).toFixed(0)}%${tf.bollinger.squeeze ? ' 🔥 SQUEEZE' : ''}
 - **ATR**: $${tf.atr.value.toLocaleString()} | **VWAP**: $${tf.vwap.value.toLocaleString()} (${tf.vwap.priceRelation})
 - **Structure**: ${tf.structure.trend.toUpperCase()} | Swing H: $${tf.structure.swingHigh.toLocaleString()} | Swing L: $${tf.structure.swingLow.toLocaleString()}
-${tf.structure.lastBoS ? `  - BoS: ${tf.structure.lastBoS.direction.toUpperCase()} at $${tf.structure.lastBoS.price.toLocaleString()}` : ''}
-${tf.structure.lastCHoCH ? `  - ⚠️ CHoCH: ${tf.structure.lastCHoCH.direction.toUpperCase()} at $${tf.structure.lastCHoCH.price.toLocaleString()} — REVERSAL SIGNAL` : ''}
-- **FVGs** (unfilled): ${tf.fvgs.length > 0 ? tf.fvgs.map((f) => `${f.type === 'bullish' ? '🟢' : '🔴'} $${f.low.toLocaleString()}-$${f.high.toLocaleString()}`).join(', ') : 'None'}
-- **Order Blocks** (unmitigated): ${tf.orderBlocks.length > 0 ? tf.orderBlocks.map((ob) => `${ob.type === 'bullish' ? '🟢' : '🔴'} $${ob.low.toLocaleString()}-$${ob.high.toLocaleString()} (${ob.strength}x vol)`).join(', ') : 'None'}`;
+${
+  tf.structure.lastBoS
+    ? `  - BoS: ${tf.structure.lastBoS.direction.toUpperCase()} at $${tf.structure.lastBoS.price.toLocaleString()}`
+    : ''
+}
+${
+  tf.structure.lastCHoCH
+    ? `  - ⚠️ CHoCH: ${tf.structure.lastCHoCH.direction.toUpperCase()} at $${tf.structure.lastCHoCH.price.toLocaleString()} — REVERSAL SIGNAL`
+    : ''
+}
+- **FVGs** (unfilled): ${
+    tf.fvgs.length > 0
+      ? tf.fvgs
+          .map((f) => `${f.type === 'bullish' ? '🟢' : '🔴'} $${f.low.toLocaleString()}-$${f.high.toLocaleString()}`)
+          .join(', ')
+      : 'None'
+  }
+- **Order Blocks** (unmitigated): ${
+    tf.orderBlocks.length > 0
+      ? tf.orderBlocks
+          .map(
+            (ob) =>
+              `${ob.type === 'bullish' ? '🟢' : '🔴'} $${ob.low.toLocaleString()}-$${ob.high.toLocaleString()} (${
+                ob.strength
+              }x vol)`,
+          )
+          .join(', ')
+      : 'None'
+  }`;
 }
 
 // =============================================================================
@@ -503,15 +536,19 @@ function buildStreamingPrompt(symbol: string, data: Awaited<ReturnType<typeof co
     marketData.ath > 0 ? (((marketData.price - marketData.ath) / marketData.ath) * 100).toFixed(2) : '0';
 
   // Build macro events string
-  const macroEventsStr = macro.highImpactEvents.length > 0
-    ? macro.highImpactEvents.slice(0, 8).map((e) => {
-        const parts = [`- ${e.event} (${e.time})`];
-        if (e.estimate !== null) parts[0] += ` | Est: ${e.estimate}`;
-        if (e.previous !== null) parts[0] += ` | Prev: ${e.previous}`;
-        if (e.actual !== null) parts[0] += ` | **Actual: ${e.actual}**`;
-        return parts[0];
-      }).join('\n')
-    : 'No high-impact US events in the next 7 days';
+  const macroEventsStr =
+    macro.highImpactEvents.length > 0
+      ? macro.highImpactEvents
+          .slice(0, 8)
+          .map((e) => {
+            const parts = [`- ${e.event} (${e.time})`];
+            if (e.estimate !== null) parts[0] += ` | Est: ${e.estimate}`;
+            if (e.previous !== null) parts[0] += ` | Prev: ${e.previous}`;
+            if (e.actual !== null) parts[0] += ` | **Actual: ${e.actual}**`;
+            return parts[0];
+          })
+          .join('\n')
+      : 'No high-impact US events in the next 7 days';
 
   return `You are an expert crypto and macro market analyst. Analyze the following real-time market data for ${symbol} with macro confluence and provide a comprehensive, well-formatted analysis using Markdown.
 
@@ -536,17 +573,43 @@ function buildStreamingPrompt(symbol: string, data: Awaited<ReturnType<typeof co
 - S1: $${technical.pivotPoints.s1.toLocaleString()} | S2: $${technical.pivotPoints.s2.toLocaleString()} | S3: $${technical.pivotPoints.s3.toLocaleString()}
 
 ## SWING LEVELS (Multi-Timeframe: 1D, 4H, 1H - Clustered)
-${technical.swingLevels.slice(0, 8).map((l) => `- ${l.type === 'support' ? '🟢 Support' : '🔴 Resistance'}: $${l.price.toLocaleString()} (strength: ${l.strength}, from ${l.timeframe})`).join('\n') || 'No swing levels detected'}
+${
+  technical.swingLevels
+    .slice(0, 8)
+    .map(
+      (l) =>
+        `- ${l.type === 'support' ? '🟢 Support' : '🔴 Resistance'}: $${l.price.toLocaleString()} (strength: ${
+          l.strength
+        }, from ${l.timeframe})`,
+    )
+    .join('\n') || 'No swing levels detected'
+}
 
 ## RECENT DAILY OHLCV (Last 7 Days)
-${technical.recentCandles.find((c) => c.timeframe === '1d')?.candles.slice(-7).map((c) => `- O: $${c.open.toLocaleString()} H: $${c.high.toLocaleString()} L: $${c.low.toLocaleString()} C: $${c.close.toLocaleString()} Vol: $${(c.volume * ((c.open + c.close) / 2) / 1e9).toFixed(2)}B`).join('\n') || 'N/A'}
+${
+  technical.recentCandles
+    .find((c) => c.timeframe === '1d')
+    ?.candles.slice(-7)
+    .map(
+      (c) =>
+        `- O: $${c.open.toLocaleString()} H: $${c.high.toLocaleString()} L: $${c.low.toLocaleString()} C: $${c.close.toLocaleString()} Vol: $${(
+          (c.volume * ((c.open + c.close) / 2)) /
+          1e9
+        ).toFixed(2)}B`,
+    )
+    .join('\n') || 'N/A'
+}
 
 ## MULTI-TIMEFRAME TECHNICAL INDICATORS (Computed from Binance Klines)
 
 ### CONFLUENCE SUMMARY
 - Overall Trend: ${indicators.confluence.overallTrend.replace('_', ' ').toUpperCase()}
 - Aligned Timeframes: ${indicators.confluence.alignedTimeframes}/3
-${indicators.confluence.conflictingSignals.length > 0 ? '⚠️ Conflicting Signals:\n' + indicators.confluence.conflictingSignals.map((s) => `  - ${s}`).join('\n') : '✅ No conflicting signals'}
+${
+  indicators.confluence.conflictingSignals.length > 0
+    ? '⚠️ Conflicting Signals:\n' + indicators.confluence.conflictingSignals.map((s) => `  - ${s}`).join('\n')
+    : '✅ No conflicting signals'
+}
 
 ${formatTimeframe(indicators['1d'], marketData.price)}
 ${formatTimeframe(indicators['4h'], marketData.price)}
@@ -570,14 +633,22 @@ ${macroEventsStr}
 
 ## WHALE & SMART MONEY ACTIVITY (Real Data from Binance Futures + Blockchain)
 ### Taker Buy/Sell Ratio (Aggressive Market Orders)
-- Latest: ${whales.takerBuySellRatio.latest.toFixed(3)} (${whales.takerBuySellRatio.latest > 1 ? 'buyers aggressive' : 'sellers aggressive'})
+- Latest: ${whales.takerBuySellRatio.latest.toFixed(3)} (${
+    whales.takerBuySellRatio.latest > 1 ? 'buyers aggressive' : 'sellers aggressive'
+  })
 - 24h Average: ${whales.takerBuySellRatio.avg24h} | Trend: ${whales.takerBuySellRatio.trend}
 ### Top Trader Positions (Binance Pro Traders)
-- Long Accounts: ${(whales.topTraderPositions.longAccountRatio * 100).toFixed(1)}% | Short Accounts: ${(whales.topTraderPositions.shortAccountRatio * 100).toFixed(1)}%
+- Long Accounts: ${(whales.topTraderPositions.longAccountRatio * 100).toFixed(1)}% | Short Accounts: ${(
+    whales.topTraderPositions.shortAccountRatio * 100
+  ).toFixed(1)}%
 - L/S Ratio: ${whales.topTraderPositions.longShortRatio} | 24h Trend: ${whales.topTraderPositions.trend24h}
 ### Open Interest Flow
-- Current OI: ${whales.openInterestFlow.currentOI.toLocaleString()} ${symbol} ($${(whales.openInterestFlow.currentOIValue / 1e9).toFixed(2)}B)
-- 24h Change: ${whales.openInterestFlow.change24h > 0 ? '+' : ''}${whales.openInterestFlow.change24h}% | Trend: ${whales.openInterestFlow.trend}
+- Current OI: ${whales.openInterestFlow.currentOI.toLocaleString()} ${symbol} ($${(
+    whales.openInterestFlow.currentOIValue / 1e9
+  ).toFixed(2)}B)
+- 24h Change: ${whales.openInterestFlow.change24h > 0 ? '+' : ''}${whales.openInterestFlow.change24h}% | Trend: ${
+    whales.openInterestFlow.trend
+  }
 ### On-Chain Whale Transactions (BTC Mempool)
 - Large Txs (>10 BTC): ${whales.onChainWhales.largeTransactions}
 - Total Volume: ${whales.onChainWhales.totalVolumeBTC} BTC (avg ${whales.onChainWhales.avgTransactionBTC} BTC/tx)
@@ -585,7 +656,10 @@ ${macroEventsStr}
 
 ## DEFI CONTEXT
 - Total DeFi TVL: $${(defi.totalTvl.totalTvl / 1e9).toFixed(1)}B
-- Top Protocols: ${defi.protocols.slice(0, 5).map((p) => `${p.name} ($${(p.tvl / 1e9).toFixed(1)}B)`).join(', ')}
+- Top Protocols: ${defi.protocols
+    .slice(0, 5)
+    .map((p) => `${p.name} ($${(p.tvl / 1e9).toFixed(1)}B)`)
+    .join(', ')}
 
 ---
 
@@ -641,6 +715,70 @@ Be concise but thorough. Use bold for important numbers and levels. Format for r
 }
 
 // =============================================================================
+// TRADE ALERT EXTRACTION (Structured output from streamed text)
+// =============================================================================
+
+const StreamedTradeAlertSchema = z.object({
+  active: z.boolean(),
+  direction: z.enum(['LONG', 'SHORT', 'NONE']),
+  entryPrice: z.number().nullable(),
+  stopLoss: z.number().nullable(),
+  takeProfit: z.number().nullable(),
+  riskRewardRatio: z.number().nullable(),
+  tradeSetup: z.string(),
+  reasoning: z.string(),
+});
+
+export async function extractTradeAlert(analysisText: string): Promise<{
+  active: boolean;
+  direction: 'LONG' | 'SHORT' | 'NONE';
+  entryPrice: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  riskRewardRatio: number | null;
+  tradeSetup: string;
+  reasoning: string;
+}> {
+  try {
+    const { output } = (await generateText({
+      model: google(MODEL_ID),
+      output: Output.object({
+        schema: StreamedTradeAlertSchema as any,
+      }),
+      prompt: `Extract the trade setup / trade alert from the following AI market analysis text.
+
+If the analysis contains specific entry, stop loss, and take profit levels, set active to true and fill in all fields.
+If no clear trade setup exists, set active to false and all numeric fields to null.
+
+Rules:
+- direction must be LONG, SHORT, or NONE
+- entryPrice, stopLoss, takeProfit are dollar amounts (numbers) or null
+- riskRewardRatio is the reward-to-risk ratio as a number (e.g. 2.5 means 2.5:1) or null
+- tradeSetup is a brief description of the setup type (e.g. "Breakout retest", "Pullback to support")
+- reasoning is a 1-2 sentence explanation
+
+ANALYSIS TEXT:
+${analysisText}`,
+      temperature: 0,
+    })) as { output: z.infer<typeof StreamedTradeAlertSchema> };
+
+    return output;
+  } catch (error: any) {
+    logger.error('Trade alert extraction error:', error.message);
+    return {
+      active: false,
+      direction: 'NONE',
+      entryPrice: null,
+      stopLoss: null,
+      takeProfit: null,
+      riskRewardRatio: null,
+      tradeSetup: '',
+      reasoning: '',
+    };
+  }
+}
+
+// =============================================================================
 // STREAMING ANALYSIS FUNCTION
 // =============================================================================
 
@@ -651,7 +789,7 @@ export async function streamAIAnalysis(symbol: string = 'BTC') {
   const result = streamText({
     model: google(MODEL_ID),
     prompt,
-    temperature: 0.7,
+    temperature: 0,
   });
 
   return {
