@@ -73,9 +73,26 @@ export interface SaveAnalysisPayload {
   // AI Analysis Text (markdown)
   analysisText?: string;
 
+  // AI Insights
+  aiInsights?: any;
+
   // Summary
   overallVerdict?: string;
   confidenceScore?: number;
+  shortTermOutlook?: string;
+  mediumTermOutlook?: string;
+  keyLevelToWatch?: string;
+  recommendedStrategy?: string;
+
+  // Trade Alert
+  tradeAlertActive?: boolean;
+  tradeAlertDirection?: string;
+  tradeAlertEntryPrice?: number | null;
+  tradeAlertStopLoss?: number | null;
+  tradeAlertTakeProfit?: number | null;
+  tradeAlertRiskReward?: number | null;
+  tradeAlertSetup?: string;
+  tradeAlertReasoning?: string;
 }
 
 /**
@@ -137,8 +154,23 @@ export async function saveAnalysis(payload: SaveAnalysisPayload): Promise<string
 
         analysisText: payload.analysisText ?? null,
 
+        aiInsights: payload.aiInsights ?? undefined,
+
         overallVerdict: payload.overallVerdict ?? null,
         confidenceScore: payload.confidenceScore ?? null,
+        shortTermOutlook: payload.shortTermOutlook ?? null,
+        mediumTermOutlook: payload.mediumTermOutlook ?? null,
+        keyLevelToWatch: payload.keyLevelToWatch ?? null,
+        recommendedStrategy: payload.recommendedStrategy ?? null,
+
+        tradeAlertActive: payload.tradeAlertActive ?? false,
+        tradeAlertDirection: payload.tradeAlertDirection ?? 'NONE',
+        tradeAlertEntryPrice: payload.tradeAlertEntryPrice ?? null,
+        tradeAlertStopLoss: payload.tradeAlertStopLoss ?? null,
+        tradeAlertTakeProfit: payload.tradeAlertTakeProfit ?? null,
+        tradeAlertRiskReward: payload.tradeAlertRiskReward ?? null,
+        tradeAlertSetup: payload.tradeAlertSetup ?? '',
+        tradeAlertReasoning: payload.tradeAlertReasoning ?? '',
       },
     });
 

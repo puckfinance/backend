@@ -148,6 +148,14 @@ export default () => {
         vwapRelation: marketData.indicators.vwapRelation,
         indicators: marketData.indicators,
         analysisText: fullAnalysisText,
+        tradeAlertActive: tradeAlert.active,
+        tradeAlertDirection: tradeAlert.direction,
+        tradeAlertEntryPrice: tradeAlert.entryPrice,
+        tradeAlertStopLoss: tradeAlert.stopLoss,
+        tradeAlertTakeProfit: tradeAlert.takeProfit,
+        tradeAlertRiskReward: tradeAlert.riskRewardRatio,
+        tradeAlertSetup: tradeAlert.tradeSetup,
+        tradeAlertReasoning: tradeAlert.reasoning,
       });
 
       res.write(`data: ${JSON.stringify({ type: 'done', analysisId: savedId })}\n\n`);
