@@ -257,6 +257,7 @@ class MexcController {
                 takeprofit: string;
                 stoplossAmount: number;
                 takeprofitAmount: number;
+                unrealizedProfit: number;
             };
 
             const extendedPositions: ExtendedPosition[] = await Promise.all(
@@ -276,12 +277,21 @@ class MexcController {
                     const stoplossAmount = stoploss ? Number(stoploss) * size - entryPrice * size : 0;
                     const takeprofitAmount = takeprofit ? Number(takeprofit) * size - entryPrice * size : 0;
 
+                    let markPrice = entryPrice;
+                    try {
+                        markPrice = await MexcFunctions.getTickerPrice(client, position.symbol);
+                    } catch {}
+                    const unrealizedProfit = position.positionType === 1
+                        ? (markPrice - entryPrice) * size
+                        : (entryPrice - markPrice) * size;
+
                     const extendedPosition: ExtendedPosition = {
                         ...position,
                         stoploss,
                         takeprofit,
                         stoplossAmount,
                         takeprofitAmount,
+                        unrealizedProfit,
                     };
 
                     return extendedPosition;

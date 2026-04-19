@@ -31,10 +31,6 @@ export const convertToPrecision = (num: number, precision: number) => {
     return Math.trunc(num * Math.pow(10, precision)) / Math.pow(10, precision);
 };
 
-const checkConnection = async (client: MexcClient) => {
-    return client.get<{ serverTime: number }>('/api/v1/contract/ping');
-};
-
 interface EntryProps {
     symbol: string;
     risk: number;
@@ -358,12 +354,15 @@ const getStopOrders = async (client: MexcClient, symbol?: string): Promise<MexcS
     return orders;
 };
 
+const getTickerPrice = async (client: MexcClient, symbol: string): Promise<number> => {
+    const ticker = await client.get<any>('/api/v1/contract/ticker', { symbol });
+    const data = Array.isArray(ticker) ? ticker[0] : ticker;
+    return parseFloat(data.lastPrice || data.fairPrice || data.indexPrice || '0');
+};
+
 const MexcFunctions = {
-    checkConnection,
-    currentPositions,
     entry,
-    getPosition,
-    setStoploss,
+    currentPositions,
     getCurrentBalance,
     getCurrentBalanceV3,
     getTradeHistory,
@@ -372,6 +371,9 @@ const MexcFunctions = {
     getIncome,
     loadMexcClient,
     getContractInfo,
+    getTickerPrice,
+    setStoploss,
+    getPosition,
 };
 
 export default MexcFunctions;
