@@ -847,7 +847,6 @@ export async function streamAIAnalysis(symbol: string = 'BTC', tfSet: TimeframeS
       fearGreedClassification: data.fearGreed.classification,
       keySupport: data.technical.keySupport,
       keyResistance: data.technical.keyResistance,
-      // Macro data
       dxy: data.macro.dxy.price,
       eurusd: data.macro.dxy.eurusd,
       gbpusd: data.macro.dxy.gbpusd,
@@ -860,7 +859,6 @@ export async function streamAIAnalysis(symbol: string = 'BTC', tfSet: TimeframeS
         estimate: e.estimate,
         previous: e.previous,
       })),
-      // Whale data
       whales: {
         takerRatio: data.whales.takerBuySellRatio.latest,
         takerTrend: data.whales.takerBuySellRatio.trend,
@@ -871,7 +869,6 @@ export async function streamAIAnalysis(symbol: string = 'BTC', tfSet: TimeframeS
         onChainLargeTxs: data.whales.onChainWhales.largeTransactions,
         onChainVolumeBTC: data.whales.onChainWhales.totalVolumeBTC,
       },
-      // Indicators — primary from highest selected TF, all from selected set
       indicators: {
         rsi: data.indicators.timeframes[primary]?.rsi.value ?? 50,
         rsiCondition: data.indicators.timeframes[primary]?.rsi.condition ?? 'neutral',
@@ -884,6 +881,318 @@ export async function streamAIAnalysis(symbol: string = 'BTC', tfSet: TimeframeS
         emaTrend: data.indicators.confluence.overallTrend,
         alignedTimeframes: data.indicators.confluence.alignedTimeframes,
         totalCheckedTimeframes: selectedTimeframes.length,
+        bollingerSqueeze: data.indicators.timeframes[primary]?.bollinger.squeeze ?? false,
+        bollingerPercentB: data.indicators.timeframes[primary]?.bollinger.percentB ?? 0.5,
+        atr: data.indicators.timeframes[primary]?.atr.value ?? 0,
+        vwapRelation: data.indicators.timeframes['4h']?.vwap.priceRelation ?? data.indicators.timeframes['15m']?.vwap.priceRelation ?? 'below',
+        marketStructure: data.indicators.timeframes[primary]?.structure.trend ?? 'ranging',
+        fvgCount: data.indicators.timeframes['4h']?.fvgs.length ?? data.indicators.timeframes['15m']?.fvgs.length ?? 0,
+        obCount: data.indicators.timeframes['4h']?.orderBlocks.length ?? data.indicators.timeframes['15m']?.orderBlocks.length ?? 0,
+        conflictingSignals: data.indicators.confluence.conflictingSignals,
+      },
+    },
+  };
+}
+
+// =============================================================================
+// BACKTEST: Historical data collection & streaming
+// =============================================================================
+
+const BINANCE_API = 'https://api.binance.com/api/v3';
+
+interface HistCandle {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  time: number;
+}
+
+async function fetchHistoricalKlines(symbol: string, interval: string, endTimeMs: number, limit: number): Promise<HistCandle[]> {
+  try {
+    const response = await fetch(`${BINANCE_API}/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}&endTime=${endTimeMs}`);
+    if (!response.ok) return [];
+    const data = await response.json() as any[][];
+    return data.map((k) => ({
+      open: parseFloat(k[1]),
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3]),
+      close: parseFloat(k[4]),
+      volume: parseFloat(k[5]),
+      time: k[0],
+    }));
+  } catch (error: any) {
+    logger.error(`Historical klines fetch error (${interval}):`, error.message);
+    return [];
+  }
+}
+
+function findSwingHighsLows(candles: HistCandle[], lookback: number = 3, timeframe: string = '1d'): Array<{ price: number; type: 'support' | 'resistance'; strength: number; timeframe: string }> {
+  const levels: Array<{ price: number; type: 'support' | 'resistance'; strength: number; timeframe: string }> = [];
+  if (candles.length < lookback * 2 + 1) return levels;
+  for (let i = lookback; i < candles.length - lookback; i++) {
+    let isSwingHigh = true;
+    let isSwingLow = true;
+    for (let j = 1; j <= lookback; j++) {
+      if (candles[i].high <= candles[i - j].high || candles[i].high <= candles[i + j].high) isSwingHigh = false;
+      if (candles[i].low >= candles[i - j].low || candles[i].low >= candles[i + j].low) isSwingLow = false;
+    }
+    if (isSwingHigh) levels.push({ price: candles[i].high, type: 'resistance', strength: 1, timeframe });
+    if (isSwingLow) levels.push({ price: candles[i].low, type: 'support', strength: 1, timeframe });
+  }
+  return levels;
+}
+
+function computePivotPoints(high: number, low: number, close: number) {
+  const pivot = (high + low + close) / 3;
+  return {
+    pivot,
+    r1: 2 * pivot - low,
+    r2: pivot + (high - low),
+    r3: high + 2 * (pivot - low),
+    s1: 2 * pivot - high,
+    s2: pivot - (high - low),
+    s3: low - 2 * (high - pivot),
+  };
+}
+
+export interface BacktestMarketData {
+  symbol: string;
+  price: number;
+  priceChange24h: number;
+  priceChangePercentage24h: number;
+  dailyHigh: number;
+  dailyLow: number;
+  keySupport: number;
+  keyResistance: number;
+  pivotPoints: ReturnType<typeof computePivotPoints>;
+  swingLevels: Array<{ price: number; type: string; strength: number; timeframe: string }>;
+  recentDailyOHLCV: HistCandle[];
+  indicators: IndicatorSuite;
+  selectedTimeframes: Timeframe[];
+  targetDate: string;
+}
+
+export async function collectHistoricalMarketData(
+  symbol: string,
+  targetDate: Date,
+  tfSet: TimeframeSet = 'all',
+): Promise<BacktestMarketData> {
+  const endTimeMs = targetDate.getTime();
+  const selectedTimeframes = getTimeframesForSet(tfSet);
+
+  const [daily, h4, h1, m15, m5] = await Promise.all([
+    fetchHistoricalKlines(symbol, '1d', endTimeMs, 250),
+    fetchHistoricalKlines(symbol, '4h', endTimeMs, 100),
+    fetchHistoricalKlines(symbol, '1h', endTimeMs, 200),
+    fetchHistoricalKlines(symbol, '15m', endTimeMs, 200),
+    fetchHistoricalKlines(symbol, '5m', endTimeMs, 200),
+  ]);
+
+  const currentPrice = daily.length > 0 ? daily[daily.length - 1].close : 0;
+  const prevDay = daily.length >= 2 ? daily[daily.length - 2] : daily[daily.length - 1];
+  const dailyHigh = daily.length > 0 ? daily[daily.length - 1].high : 0;
+  const dailyLow = daily.length > 0 ? daily[daily.length - 1].low : 0;
+  const pricePrevDay = daily.length >= 2 ? daily[daily.length - 2].close : currentPrice;
+  const priceChange24h = currentPrice - pricePrevDay;
+  const priceChangePercentage24h = pricePrevDay > 0 ? (priceChange24h / pricePrevDay) * 100 : 0;
+
+  const pivotPoints = prevDay
+    ? computePivotPoints(prevDay.high, prevDay.low, prevDay.close)
+    : computePivotPoints(dailyHigh, dailyLow, currentPrice);
+
+  const dailySwings = findSwingHighsLows(daily, 2, '1d');
+  const h4Swings = findSwingHighsLows(h4, 3, '4h');
+  const h1Swings = findSwingHighsLows(h1, 3, '1h');
+  const allSwings = [...dailySwings, ...h4Swings, ...h1Swings];
+
+  const supports = allSwings.filter((l) => l.price < currentPrice).sort((a, b) => b.price - a.price);
+  const resistances = allSwings.filter((l) => l.price > currentPrice).sort((a, b) => a.price - b.price);
+
+  const keySupport = supports.length > 0 ? supports[0].price : pivotPoints.s1;
+  const keyResistance = resistances.length > 0 ? resistances[0].price : pivotPoints.r1;
+  const swingLevels = allSwings.slice(0, 10);
+
+  const candleMap: Partial<Record<Timeframe, import('./technicalIndicators').Candle[]>> = {};
+  const tfCandleMap: Array<{ timeframe: string; candles: HistCandle[] }> = [
+    { timeframe: '1d', candles: daily },
+    { timeframe: '4h', candles: h4 },
+    { timeframe: '1h', candles: h1 },
+    { timeframe: '15m', candles: m15 },
+    { timeframe: '5m', candles: m5 },
+  ];
+  for (const tf of selectedTimeframes) {
+    const candles = tfCandleMap.find((c) => c.timeframe === tf)?.candles || [];
+    if (candles.length > 0) candleMap[tf] = candles as any;
+  }
+  const indicators = computeAllIndicators(candleMap);
+
+  return {
+    symbol,
+    price: currentPrice,
+    priceChange24h,
+    priceChangePercentage24h,
+    dailyHigh,
+    dailyLow,
+    keySupport,
+    keyResistance,
+    pivotPoints,
+    swingLevels,
+    recentDailyOHLCV: daily.slice(-7),
+    indicators,
+    selectedTimeframes,
+    targetDate: targetDate.toISOString(),
+  };
+}
+
+function buildBacktestPrompt(symbol: string, data: BacktestMarketData, tfSet: TimeframeSet): string {
+  const ind = data.indicators;
+
+  const recentOHLCV = data.recentDailyOHLCV
+    .map((c) => `- O: $${c.open.toLocaleString()} H: $${c.high.toLocaleString()} L: $${c.low.toLocaleString()} C: $${c.close.toLocaleString()} Vol: ${c.volume.toLocaleString()}`)
+    .join('\n');
+
+  const swingStr = data.swingLevels
+    .slice(0, 8)
+    .map((l) => `- ${l.type === 'support' ? '🟢 Support' : '🔴 Resistance'}: $${l.price.toLocaleString()} (from ${l.timeframe})`)
+    .join('\n') || 'No swing levels detected';
+
+  let indicatorsStr = '';
+  for (const tf of data.selectedTimeframes) {
+    const tfData = ind.timeframes[tf];
+    if (!tfData) continue;
+    indicatorsStr += `
+### ${tf.toUpperCase()} Timeframe
+- RSI: ${tfData.rsi.value.toFixed(1)} (${tfData.rsi.condition})
+- MACD Histogram: ${tfData.macd.histogram > 0 ? '+' : ''}${tfData.macd.histogram.toFixed(2)} | Trend: ${tfData.macd.trend}
+- EMA Trend: ${ind.confluence.overallTrend.replace('_', ' ').toUpperCase()} (${ind.confluence.alignedTimeframes}/${data.selectedTimeframes.length} aligned)
+- Bollinger %B: ${(tfData.bollinger.percentB * 100).toFixed(0)}%${tfData.bollinger.squeeze ? ' ⚠️ SQUEEZE' : ''}
+- ATR: $${tfData.atr.value.toFixed(2)}
+- VWAP: ${tfData.vwap.priceRelation}
+- Structure: ${tfData.structure.trend}
+`;
+  }
+
+  return `You are an expert crypto market analyst performing a **BACKTEST ANALYSIS**.
+
+This is NOT live data. This is a historical snapshot for ${symbol} at **${data.targetDate}**.
+The price at that time was $${data.price.toLocaleString()}.
+You do NOT know what happened after this date. Analyze as if you are at this point in time.
+
+## MARKET DATA (Historical Snapshot)
+- Price: $${data.price.toLocaleString()}
+- 24h Change: $${data.priceChange24h.toLocaleString()} (${data.priceChangePercentage24h.toFixed(2)}%)
+- 24h High: $${data.dailyHigh.toLocaleString()}
+- 24h Low: $${data.dailyLow.toLocaleString()}
+
+## TECHNICAL LEVELS
+- Key Support: $${data.keySupport.toLocaleString()}
+- Key Resistance: $${data.keyResistance.toLocaleString()}
+
+## PIVOT POINTS
+- R3: $${data.pivotPoints.r3.toLocaleString()} | R2: $${data.pivotPoints.r2.toLocaleString()} | R1: $${data.pivotPoints.r1.toLocaleString()}
+- Pivot: $${data.pivotPoints.pivot.toLocaleString()}
+- S1: $${data.pivotPoints.s1.toLocaleString()} | S2: $${data.pivotPoints.s2.toLocaleString()} | S3: $${data.pivotPoints.s3.toLocaleString()}
+
+## SWING LEVELS
+${swingStr}
+
+## RECENT DAILY OHLCV
+${recentOHLCV}
+
+## TECHNICAL INDICATORS (Computed from Binance Historical Klines)
+${tfSet === 'lower' ? '\n**FOCUS: Lower Timeframe Scalping (15m, 5m)**\n' : tfSet === 'higher' ? '\n**FOCUS: Higher Timeframe Swing (1D, 4H, 1H)**\n' : ''}
+### CONFLUENCE
+- Overall Trend: ${ind.confluence.overallTrend.replace('_', ' ').toUpperCase()}
+- Aligned: ${ind.confluence.alignedTimeframes}/${data.selectedTimeframes.length}
+${ind.confluence.conflictingSignals.length > 0 ? '⚠️ Conflicts:\n' + ind.confluence.conflictingSignals.map((s) => `  - ${s}`).join('\n') : '✅ No conflicts'}
+
+${indicatorsStr}
+
+---
+
+Analyze this historical data as a market analyst would at that moment. Provide:
+
+## 📊 Market Overview
+Summarize the price action and context at this snapshot.
+
+## 📈 Technical Analysis
+${tfSet === 'lower' ? 'Focus on scalping setups using 15m and 5m timeframes.' : tfSet === 'higher' ? 'Focus on swing trading setups using daily, 4H, and 1H timeframes.' : 'Cover both swing and scalping perspectives.'}
+
+## 🔍 Key Insights
+- 3-4 observations from the data
+- 2-3 risk factors
+- 2-3 potential opportunities
+
+## 🎯 Trading Considerations
+Provide a specific trade setup:
+- Direction (Long/Short/Neutral)
+- Entry, Stop Loss, Take Profit levels
+- Risk/Reward ratio
+- Setup description
+
+## 📝 Summary
+- Short-term outlook
+- Medium-term outlook
+- **Verdict**: STRONG_BUY / BUY / NEUTRAL / SELL / STRONG_SELL with confidence (0-100)
+- Key level to watch
+
+Be concise. Use bold for key levels.`;
+}
+
+export async function streamBacktestAnalysis(symbol: string, targetDate: Date, tfSet: TimeframeSet = 'all') {
+  const data = await collectHistoricalMarketData(symbol, targetDate, tfSet);
+  const primary = data.selectedTimeframes[0];
+  const prompt = buildBacktestPrompt(symbol, data, tfSet);
+
+  const result = streamText({
+    model: google(MODEL_ID),
+    prompt,
+    temperature: 0,
+  });
+
+  return {
+    stream: result,
+    marketData: {
+      symbol,
+      price: data.price,
+      priceChange24h: data.priceChange24h,
+      priceChangePercentage24h: data.priceChangePercentage24h,
+      marketCap: 0,
+      volume24h: 0,
+      ath: 0,
+      fearGreedIndex: 0,
+      fearGreedClassification: 'N/A (Backtest)',
+      keySupport: data.keySupport,
+      keyResistance: data.keyResistance,
+      dxy: 0,
+      eurusd: 'N/A',
+      gbpusd: 'N/A',
+      usdjpy: 'N/A',
+      upcomingEvents: [],
+      whales: {
+        takerRatio: 0,
+        takerTrend: 'N/A',
+        topTraderLongPct: 0,
+        topTraderTrend: 'N/A',
+        oiValue: 0,
+        oiChange24h: 0,
+        onChainLargeTxs: 0,
+        onChainVolumeBTC: 0,
+      },
+      indicators: {
+        rsi: data.indicators.timeframes[primary]?.rsi.value ?? 50,
+        rsiCondition: data.indicators.timeframes[primary]?.rsi.condition ?? 'neutral',
+        rsi4h: data.indicators.timeframes['4h']?.rsi.value,
+        rsi1h: data.indicators.timeframes['1h']?.rsi.value,
+        rsi15m: data.indicators.timeframes['15m']?.rsi.value,
+        rsi5m: data.indicators.timeframes['5m']?.rsi.value,
+        macdHistogram: data.indicators.timeframes[primary]?.macd.histogram ?? 0,
+        macdTrend: data.indicators.timeframes[primary]?.macd.trend ?? 'neutral',
+        emaTrend: data.indicators.confluence.overallTrend,
+        alignedTimeframes: data.indicators.confluence.alignedTimeframes,
+        totalCheckedTimeframes: data.selectedTimeframes.length,
         bollingerSqueeze: data.indicators.timeframes[primary]?.bollinger.squeeze ?? false,
         bollingerPercentB: data.indicators.timeframes[primary]?.bollinger.percentB ?? 0.5,
         atr: data.indicators.timeframes[primary]?.atr.value ?? 0,

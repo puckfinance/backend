@@ -10,7 +10,8 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis, extractTradeAlert, type TimeframeSet } from '../services/aiAnalysis';
+import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis, streamBacktestAnalysis, extractTradeAlert, type TimeframeSet } from '../services/aiAnalysis';
+import { evaluateTrade, fetchBinanceKlines } from './MarketAnalysisHistoryController';
 import { saveAnalysis } from '../services/analysisHistory';
 import logger from '../utils/Logger';
 import Log from '../services/log';
@@ -179,6 +180,109 @@ export default () => {
         });
       }
       // If streaming already started, send error as SSE event
+      res.write(`data: ${JSON.stringify({ type: 'error', data: error.message })}\n\n`);
+      res.end();
+    }
+  });
+
+  // GET /api/v1/ai/backtest/stream - Streaming backtest analysis via SSE
+  router.get('/backtest/stream', async (req: Request, res: Response) => {
+    try {
+      const querySchema = z.object({
+        symbol: z.string().optional().default('BTC'),
+        date: z.string().min(1),
+        timeframe: z.enum(['higher', 'lower', 'all']).optional().default('all'),
+      });
+
+      const { symbol, date, timeframe } = querySchema.parse(req.query);
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({ success: false, error: 'Invalid date format' });
+      }
+      if (targetDate >= new Date()) {
+        return res.status(400).json({ success: false, error: 'Date must be in the past' });
+      }
+
+      logger.info(`Streaming backtest analysis for ${symbol} at ${date}`);
+
+      if (req.clearTimeout) req.clearTimeout();
+
+      const { stream, marketData } = await streamBacktestAnalysis(symbol.toUpperCase(), targetDate, timeframe as TimeframeSet);
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.flushHeaders();
+
+      res.write(`data: ${JSON.stringify({ type: 'market-data', data: { ...marketData, isBacktest: true, targetDate: date } })}\n\n`);
+
+      let fullAnalysisText = '';
+
+      for await (const chunk of stream.textStream) {
+        fullAnalysisText += chunk;
+        res.write(`data: ${JSON.stringify({ type: 'text-delta', data: chunk })}\n\n`);
+      }
+
+      const tradeAlert = await extractTradeAlert(fullAnalysisText);
+      res.write(`data: ${JSON.stringify({ type: 'trade-alert', data: tradeAlert })}\n\n`);
+
+      let tradeResult = null;
+      if (
+        tradeAlert.active &&
+        tradeAlert.direction !== 'NONE' &&
+        tradeAlert.entryPrice != null &&
+        tradeAlert.stopLoss != null &&
+        tradeAlert.takeProfit != null
+      ) {
+        const startTimeMs = targetDate.getTime();
+        const nowMs = Date.now();
+        try {
+          const klines = await fetchBinanceKlines(symbol.toUpperCase(), startTimeMs, nowMs);
+          const result = evaluateTrade(
+            klines,
+            tradeAlert.direction as 'LONG' | 'SHORT',
+            tradeAlert.entryPrice,
+            tradeAlert.stopLoss,
+            tradeAlert.takeProfit,
+          );
+          const hitKline = result === 'WIN' || result === 'LOSS'
+            ? klines.find((k) => {
+                const high = parseFloat(k.high);
+                const low = parseFloat(k.low);
+                if (tradeAlert.direction === 'LONG') {
+                  return (result === 'WIN' && high >= tradeAlert.takeProfit!) ||
+                         (result === 'LOSS' && low <= tradeAlert.stopLoss!);
+                }
+                return (result === 'WIN' && low <= tradeAlert.takeProfit!) ||
+                       (result === 'LOSS' && high >= tradeAlert.stopLoss!);
+              })
+            : null;
+          const lastClose = klines.length > 0 ? parseFloat(klines[klines.length - 1].close) : null;
+          tradeResult = {
+            result,
+            hitAt: hitKline ? new Date(hitKline.openTime).toISOString() : null,
+            currentPrice: lastClose,
+          };
+        } catch (err: any) {
+          logger.error('Backtest trade result evaluation failed:', err.message);
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ type: 'trade-result', data: tradeResult })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      res.end();
+    } catch (error: any) {
+      logger.error('Error streaming backtest analysis:', error);
+      Log.sendLog({ error });
+
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          error: error.message || 'Failed to stream backtest analysis',
+        });
+      }
       res.write(`data: ${JSON.stringify({ type: 'error', data: error.message })}\n\n`);
       res.end();
     }

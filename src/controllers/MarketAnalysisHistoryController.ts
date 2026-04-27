@@ -14,7 +14,7 @@ import { z } from 'zod';
 import prisma from '../infrastructure/prisma';
 import logger from '../utils/Logger';
 
-interface BinanceKline {
+export interface BinanceKline {
   openTime: number;
   open: string;
   high: string;
@@ -22,7 +22,7 @@ interface BinanceKline {
   close: string;
 }
 
-async function fetchBinanceKlines(symbol: string, startTimeMs: number, endTimeMs: number): Promise<BinanceKline[]> {
+export async function fetchBinanceKlines(symbol: string, startTimeMs: number, endTimeMs: number): Promise<BinanceKline[]> {
   const binanceSymbol = `${symbol}USDT`;
   const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1h&startTime=${startTimeMs}&endTime=${endTimeMs}&limit=1000`;
 
@@ -41,9 +41,9 @@ async function fetchBinanceKlines(symbol: string, startTimeMs: number, endTimeMs
   }));
 }
 
-type TradeResult = 'WIN' | 'LOSS' | 'PENDING' | 'NO_TRADE';
+export type TradeResult = 'WIN' | 'LOSS' | 'PENDING' | 'NO_TRADE';
 
-function evaluateTrade(
+export function evaluateTrade(
   klines: BinanceKline[],
   direction: 'LONG' | 'SHORT',
   entryPrice: number,
