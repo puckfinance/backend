@@ -170,6 +170,10 @@ model MarketAnalysis {
   tradeAlertSetup      String?
   tradeAlertReasoning  String?
 
+  // Backtest marker
+  isBacktest Boolean @default(false)
+  backtestDate String?
+
   @@index([symbol])
   @@index([createdAt])
   @@index([userId])

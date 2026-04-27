@@ -271,6 +271,42 @@ export default () => {
       }
 
       res.write(`data: ${JSON.stringify({ type: 'trade-result', data: tradeResult })}\n\n`);
+
+      saveAnalysis({
+        symbol: symbol.toUpperCase(),
+        price: marketData.price,
+        priceChange24h: marketData.priceChange24h,
+        priceChangePercentage24h: marketData.priceChangePercentage24h,
+        marketCap: 0,
+        volume24h: 0,
+        keySupport: marketData.keySupport,
+        keyResistance: marketData.keyResistance,
+        fearGreedIndex: marketData.fearGreedIndex,
+        fearGreedClassification: marketData.fearGreedClassification,
+        rsi: marketData.indicators.rsi,
+        rsiCondition: marketData.indicators.rsiCondition,
+        macdHistogram: marketData.indicators.macdHistogram,
+        macdTrend: marketData.indicators.macdTrend,
+        emaTrend: marketData.indicators.emaTrend,
+        marketStructure: marketData.indicators.marketStructure,
+        bollingerSqueeze: marketData.indicators.bollingerSqueeze,
+        bollingerPercentB: marketData.indicators.bollingerPercentB,
+        atr: marketData.indicators.atr,
+        vwapRelation: marketData.indicators.vwapRelation,
+        indicators: marketData.indicators,
+        analysisText: fullAnalysisText,
+        tradeAlertActive: tradeAlert.active,
+        tradeAlertDirection: tradeAlert.direction,
+        tradeAlertEntryPrice: tradeAlert.entryPrice,
+        tradeAlertStopLoss: tradeAlert.stopLoss,
+        tradeAlertTakeProfit: tradeAlert.takeProfit,
+        tradeAlertRiskReward: tradeAlert.riskRewardRatio,
+        tradeAlertSetup: tradeAlert.tradeSetup,
+        tradeAlertReasoning: tradeAlert.reasoning,
+        isBacktest: true,
+        backtestDate: date,
+      }).catch((err) => logger.error('Backtest save failed:', err));
+
       res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
       res.end();
     } catch (error: any) {

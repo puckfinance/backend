@@ -93,6 +93,10 @@ export interface SaveAnalysisPayload {
   tradeAlertRiskReward?: number | null;
   tradeAlertSetup?: string;
   tradeAlertReasoning?: string;
+
+  // Backtest
+  isBacktest?: boolean;
+  backtestDate?: string;
 }
 
 /**
@@ -171,6 +175,9 @@ export async function saveAnalysis(payload: SaveAnalysisPayload): Promise<string
         tradeAlertRiskReward: payload.tradeAlertRiskReward ?? null,
         tradeAlertSetup: payload.tradeAlertSetup ?? '',
         tradeAlertReasoning: payload.tradeAlertReasoning ?? '',
+
+        isBacktest: payload.isBacktest ?? false,
+        backtestDate: payload.backtestDate ?? null,
       },
     });
 

@@ -969,6 +969,7 @@ export interface BacktestMarketData {
   pivotPoints: ReturnType<typeof computePivotPoints>;
   swingLevels: Array<{ price: number; type: string; strength: number; timeframe: string }>;
   recentDailyOHLCV: HistCandle[];
+  allDailyKlines: HistCandle[];
   indicators: IndicatorSuite;
   selectedTimeframes: Timeframe[];
   targetDate: string;
@@ -1040,6 +1041,7 @@ export async function collectHistoricalMarketData(
     pivotPoints,
     swingLevels,
     recentDailyOHLCV: daily.slice(-7),
+    allDailyKlines: daily.slice(-90),
     indicators,
     selectedTimeframes,
     targetDate: targetDate.toISOString(),
@@ -1202,6 +1204,13 @@ export async function streamBacktestAnalysis(symbol: string, targetDate: Date, t
         obCount: data.indicators.timeframes['4h']?.orderBlocks.length ?? data.indicators.timeframes['15m']?.orderBlocks.length ?? 0,
         conflictingSignals: data.indicators.confluence.conflictingSignals,
       },
+      dailyKlines: data.allDailyKlines.map((k) => ({
+        time: Math.floor(k.time / 1000),
+        open: k.open,
+        high: k.high,
+        low: k.low,
+        close: k.close,
+      })),
     },
   };
 }
