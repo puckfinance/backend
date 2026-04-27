@@ -46,15 +46,26 @@ type TradeResult = 'WIN' | 'LOSS' | 'PENDING' | 'NO_TRADE';
 function evaluateTrade(
   klines: BinanceKline[],
   direction: 'LONG' | 'SHORT',
-  _entryPrice: number,
+  entryPrice: number,
   stopLoss: number,
   takeProfit: number,
 ): TradeResult {
   if (klines.length === 0) return 'PENDING';
 
+  let entryHit = false;
+
   for (const k of klines) {
     const high = parseFloat(k.high);
     const low = parseFloat(k.low);
+
+    if (!entryHit) {
+      if (direction === 'LONG') {
+        if (low <= entryPrice) entryHit = true;
+      } else {
+        if (high >= entryPrice) entryHit = true;
+      }
+      if (!entryHit) continue;
+    }
 
     if (direction === 'LONG') {
       const hitSL = low <= stopLoss;
@@ -74,6 +85,8 @@ function evaluateTrade(
       if (hitTP) return 'WIN';
     }
   }
+
+  if (!entryHit) return 'PENDING';
 
   return 'PENDING';
 }
