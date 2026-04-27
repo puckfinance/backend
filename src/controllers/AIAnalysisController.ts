@@ -10,7 +10,7 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis, extractTradeAlert } from '../services/aiAnalysis';
+import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis, extractTradeAlert, type TimeframeSet } from '../services/aiAnalysis';
 import { saveAnalysis } from '../services/analysisHistory';
 import logger from '../utils/Logger';
 import Log from '../services/log';
@@ -87,17 +87,24 @@ export default () => {
     try {
       const querySchema = z.object({
         symbol: z.string().optional().default('BTC'),
+        timeframe: z.enum(['higher', 'lower', 'all']).optional().default('all'),
       });
 
-      const { symbol } = querySchema.parse(req.query);
-      logger.info(`Streaming AI analysis for ${symbol}`);
-      const { stream, marketData } = await streamAIAnalysis(symbol.toUpperCase());
+      const { symbol, timeframe } = querySchema.parse(req.query);
+      logger.info(`Streaming AI analysis for ${symbol} (timeframe: ${timeframe})`);
 
-      // Set SSE headers
+      // Disable connect-timeout for this long-running SSE endpoint
+      if (req.clearTimeout) req.clearTimeout();
+
+      const { stream, marketData } = await streamAIAnalysis(symbol.toUpperCase(), timeframe as TimeframeSet);
+
+      // Set SSE headers — include anti-proxy-buffering headers for CDN/Nginx/Cloudflare
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.flushHeaders();
 
       // Send market data as the first event
       res.write(`data: ${JSON.stringify({ type: 'market-data', data: marketData })}\n\n`);

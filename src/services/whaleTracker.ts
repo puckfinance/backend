@@ -808,7 +808,7 @@ export async function getTechnicalLevels(symbol: string = 'BTC'): Promise<{
 }> {
   try {
     // Fetch multiple timeframes in parallel
-    const [ticker, daily, h4, h1] = await Promise.all([
+    const [ticker, daily, h4, h1, m15, m5] = await Promise.all([
       axios.get(`${BINANCE_API_URL}/ticker/24hr`, {
         params: { symbol: `${symbol}USDT` },
         timeout: 10000,
@@ -816,6 +816,8 @@ export async function getTechnicalLevels(symbol: string = 'BTC'): Promise<{
       getKlines(symbol, '1d', 250),  // 250 days (enough for EMA 200)
       getKlines(symbol, '4h', 100),  // ~16 days of 4h
       getKlines(symbol, '1h', 200),  // ~8 days of 1h (enough for EMA 200)
+      getKlines(symbol, '15m', 200),  // ~50 hours of 15m
+      getKlines(symbol, '5m', 200),   // ~16 hours of 5m
     ]);
 
     const data = ticker.data;
@@ -856,6 +858,8 @@ export async function getTechnicalLevels(symbol: string = 'BTC'): Promise<{
         { timeframe: '1d', candles: daily },
         { timeframe: '4h', candles: h4 },
         { timeframe: '1h', candles: h1 },
+        { timeframe: '15m', candles: m15 },
+        { timeframe: '5m', candles: m5 },
       ],
     };
   } catch (error: any) {

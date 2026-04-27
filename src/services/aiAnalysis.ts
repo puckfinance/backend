@@ -15,7 +15,7 @@ import { getCoinGeckoMarketData, getDeFiLlamaProtocols, getTotalDeFiTVL } from '
 import { getFearAndGreedIndex, getTechnicalLevels, getMarketSentiment, getWhaleActivity } from './whaleTracker';
 import type { WhaleActivity } from './whaleTracker';
 import { getMacroContext, type MacroContext } from './finnhub';
-import { computeAllIndicators, type IndicatorSuite } from './technicalIndicators';
+import { computeAllIndicators, type IndicatorSuite, type Timeframe, type TimeframeIndicators, type Candle } from './technicalIndicators';
 import logger from '../utils/Logger';
 
 // Google Gemini model
@@ -112,7 +112,21 @@ export interface AIDetailedAnalysis {
 // DATA COLLECTOR
 // =============================================================================
 
-async function collectMarketData(symbol: string): Promise<{
+export type TimeframeSet = 'higher' | 'lower' | 'all';
+
+const HIGHER_TFS: Timeframe[] = ['1d', '4h', '1h'];
+const LOWER_TFS: Timeframe[] = ['15m', '5m'];
+const ALL_TFS: Timeframe[] = ['1d', '4h', '1h', '15m', '5m'];
+
+function getTimeframesForSet(tfSet: TimeframeSet): Timeframe[] {
+  switch (tfSet) {
+    case 'higher': return HIGHER_TFS;
+    case 'lower': return LOWER_TFS;
+    case 'all': return ALL_TFS;
+  }
+}
+
+async function collectMarketData(symbol: string, tfSet: TimeframeSet = 'all'): Promise<{
   marketData: Awaited<ReturnType<typeof getCoinGeckoMarketData>>;
   sentiment: Awaited<ReturnType<typeof getMarketSentiment>>;
   technical: Awaited<ReturnType<typeof getTechnicalLevels>>;
@@ -124,6 +138,8 @@ async function collectMarketData(symbol: string): Promise<{
   macro: MacroContext;
   whales: WhaleActivity;
   indicators: IndicatorSuite;
+  tfSet: TimeframeSet;
+  selectedTimeframes: Timeframe[];
 }> {
   const [marketData, sentiment, technical, fearGreedData, defiProtocols, totalTvl, macro, whales] = await Promise.all([
     getCoinGeckoMarketData(symbol),
@@ -136,11 +152,13 @@ async function collectMarketData(symbol: string): Promise<{
     getWhaleActivity(symbol),
   ]);
 
-  // Compute indicators from the klines already fetched by getTechnicalLevels
-  const dailyCandles = technical.recentCandles.find((c) => c.timeframe === '1d')?.candles || [];
-  const h4Candles = technical.recentCandles.find((c) => c.timeframe === '4h')?.candles || [];
-  const h1Candles = technical.recentCandles.find((c) => c.timeframe === '1h')?.candles || [];
-  const indicators = computeAllIndicators(dailyCandles, h4Candles, h1Candles);
+  const selectedTimeframes = getTimeframesForSet(tfSet);
+  const candleMap: Partial<Record<Timeframe, Candle[]>> = {};
+  for (const tf of selectedTimeframes) {
+    const candles = technical.recentCandles.find((c) => c.timeframe === tf)?.candles || [];
+    if (candles.length > 0) candleMap[tf] = candles;
+  }
+  const indicators = computeAllIndicators(candleMap);
 
   return {
     marketData,
@@ -154,6 +172,8 @@ async function collectMarketData(symbol: string): Promise<{
     macro,
     whales,
     indicators,
+    tfSet,
+    selectedTimeframes,
   };
 }
 
@@ -475,8 +495,6 @@ export async function getAIQuickSummary(symbol: string = 'BTC'): Promise<{
 // TIMEFRAME FORMATTER FOR PROMPT
 // =============================================================================
 
-import type { TimeframeIndicators } from './technicalIndicators';
-
 function formatTimeframe(tf: TimeframeIndicators, _currentPrice: number): string {
   const label = tf.timeframe.toUpperCase();
   return `### ${label} Timeframe
@@ -530,7 +548,7 @@ ${
 // =============================================================================
 
 function buildStreamingPrompt(symbol: string, data: Awaited<ReturnType<typeof collectMarketData>>): string {
-  const { marketData, sentiment, technical, fearGreed, defi, macro, whales, indicators } = data;
+  const { marketData, sentiment, technical, fearGreed, defi, macro, whales, indicators, tfSet, selectedTimeframes } = data;
 
   const distanceFromAth =
     marketData.ath > 0 ? (((marketData.price - marketData.ath) / marketData.ath) * 100).toFixed(2) : '0';
@@ -601,19 +619,21 @@ ${
 }
 
 ## MULTI-TIMEFRAME TECHNICAL INDICATORS (Computed from Binance Klines)
+${tfSet === 'lower' ? '\n**FOCUS: Lower Timeframe Scalping Analysis (15m, 5m)**\n' : tfSet === 'higher' ? '\n**FOCUS: Higher Timeframe Swing Analysis (1D, 4H, 1H)**\n' : ''}
 
 ### CONFLUENCE SUMMARY
 - Overall Trend: ${indicators.confluence.overallTrend.replace('_', ' ').toUpperCase()}
-- Aligned Timeframes: ${indicators.confluence.alignedTimeframes}/3
+- Aligned Timeframes: ${indicators.confluence.alignedTimeframes}/${selectedTimeframes.length}
 ${
   indicators.confluence.conflictingSignals.length > 0
     ? '⚠️ Conflicting Signals:\n' + indicators.confluence.conflictingSignals.map((s) => `  - ${s}`).join('\n')
     : '✅ No conflicting signals'
 }
 
-${formatTimeframe(indicators['1d'], marketData.price)}
-${formatTimeframe(indicators['4h'], marketData.price)}
-${formatTimeframe(indicators['1h'], marketData.price)}
+${selectedTimeframes.map((tf) => {
+  const tfData = indicators.timeframes[tf];
+  return tfData ? formatTimeframe(tfData, marketData.price) : '';
+}).filter(Boolean).join('\n\n')}
 
 ## SENTIMENT DATA
 - Fear & Greed Index: ${fearGreed.value} (${fearGreed.classification})
@@ -669,7 +689,19 @@ Please write a detailed analysis with the following sections using proper Markdo
 Summarize the current price action, volume, and market cap context.
 
 ## 📈 Technical Analysis
-Analyze support/resistance levels, trend direction, and volatility. Be specific about price levels.
+${
+  tfSet === 'lower'
+    ? `**Focus on scalping and short-term price action using 15m and 5m timeframes.**
+Analyze micro support/resistance levels, intraday trend direction, and short-term volatility.
+Identify precise entry/exit zones for quick trades. Highlight any 15m/5m chart patterns (flags, wedges, etc.).
+Comment on intraday momentum and whether the short-term trend aligns with or diverges from the bigger picture.`
+    : tfSet === 'higher'
+    ? `Analyze support/resistance levels, trend direction, and volatility. Be specific about price levels.
+Focus on swing trading setups using daily, 4H, and 1H timeframes.`
+    : `Analyze support/resistance levels, trend direction, and volatility. Be specific about price levels.
+Include BOTH swing trading perspective (1D/4H/1H) and scalping perspective (15m/5m).
+Highlight any divergences between higher and lower timeframes.`
+}
 
 ## 💵 DXY & Macro Confluence
 **This is critical.** Analyze the DXY level and its implications for ${symbol}. Discuss:
@@ -704,10 +736,17 @@ Provide a specific trade setup if one exists:
 - Risk/Reward ratio
 - Setup description
 - **Macro risk warning** if any high-impact events are upcoming
+${
+  tfSet === 'lower'
+    ? `- Suggested holding time (minutes to hours) and ideal take-profit increments`
+    : tfSet === 'higher'
+    ? `- Suggested holding time (days to weeks)`
+    : `- Suggested holding time based on the dominant timeframe`
+}
 
 ## 📝 Summary & Outlook
-- **Short-term (24-72h)**: Brief outlook considering upcoming macro events
-- **Medium-term (1-4 weeks)**: Brief outlook
+- **Short-term (${tfSet === 'lower' ? '1-4 hours' : '24-72h'})**: Brief outlook considering upcoming macro events
+- **Medium-term (${tfSet === 'lower' ? '1-24 hours' : '1-4 weeks'})**: Brief outlook
 - **Verdict**: STRONG_BUY / BUY / NEUTRAL / SELL / STRONG_SELL with confidence score (0-100)
 - **Key Level to Watch**: Specific price level with explanation
 
@@ -782,8 +821,10 @@ ${analysisText}`,
 // STREAMING ANALYSIS FUNCTION
 // =============================================================================
 
-export async function streamAIAnalysis(symbol: string = 'BTC') {
-  const data = await collectMarketData(symbol);
+export async function streamAIAnalysis(symbol: string = 'BTC', tfSet: TimeframeSet = 'all') {
+  const data = await collectMarketData(symbol, tfSet);
+  const { selectedTimeframes } = data;
+  const primary = selectedTimeframes[0];
   const prompt = buildStreamingPrompt(symbol, data);
 
   const result = streamText({
@@ -830,24 +871,26 @@ export async function streamAIAnalysis(symbol: string = 'BTC') {
         onChainLargeTxs: data.whales.onChainWhales.largeTransactions,
         onChainVolumeBTC: data.whales.onChainWhales.totalVolumeBTC,
       },
-      // Indicators
+      // Indicators — primary from highest selected TF, all from selected set
       indicators: {
-        // Use daily as primary, show all TFs
-        rsi: data.indicators['1d'].rsi.value,
-        rsiCondition: data.indicators['1d'].rsi.condition,
-        rsi4h: data.indicators['4h'].rsi.value,
-        rsi1h: data.indicators['1h'].rsi.value,
-        macdHistogram: data.indicators['1d'].macd.histogram,
-        macdTrend: data.indicators['1d'].macd.trend,
+        rsi: data.indicators.timeframes[primary]?.rsi.value ?? 50,
+        rsiCondition: data.indicators.timeframes[primary]?.rsi.condition ?? 'neutral',
+        rsi4h: data.indicators.timeframes['4h']?.rsi.value,
+        rsi1h: data.indicators.timeframes['1h']?.rsi.value,
+        rsi15m: data.indicators.timeframes['15m']?.rsi.value,
+        rsi5m: data.indicators.timeframes['5m']?.rsi.value,
+        macdHistogram: data.indicators.timeframes[primary]?.macd.histogram ?? 0,
+        macdTrend: data.indicators.timeframes[primary]?.macd.trend ?? 'neutral',
         emaTrend: data.indicators.confluence.overallTrend,
         alignedTimeframes: data.indicators.confluence.alignedTimeframes,
-        bollingerSqueeze: data.indicators['1d'].bollinger.squeeze,
-        bollingerPercentB: data.indicators['1d'].bollinger.percentB,
-        atr: data.indicators['1d'].atr.value,
-        vwapRelation: data.indicators['4h'].vwap.priceRelation,
-        marketStructure: data.indicators['1d'].structure.trend,
-        fvgCount: data.indicators['4h'].fvgs.length,
-        obCount: data.indicators['4h'].orderBlocks.length,
+        totalCheckedTimeframes: selectedTimeframes.length,
+        bollingerSqueeze: data.indicators.timeframes[primary]?.bollinger.squeeze ?? false,
+        bollingerPercentB: data.indicators.timeframes[primary]?.bollinger.percentB ?? 0.5,
+        atr: data.indicators.timeframes[primary]?.atr.value ?? 0,
+        vwapRelation: data.indicators.timeframes['4h']?.vwap.priceRelation ?? data.indicators.timeframes['15m']?.vwap.priceRelation ?? 'below',
+        marketStructure: data.indicators.timeframes[primary]?.structure.trend ?? 'ranging',
+        fvgCount: data.indicators.timeframes['4h']?.fvgs.length ?? data.indicators.timeframes['15m']?.fvgs.length ?? 0,
+        obCount: data.indicators.timeframes['4h']?.orderBlocks.length ?? data.indicators.timeframes['15m']?.orderBlocks.length ?? 0,
         conflictingSignals: data.indicators.confluence.conflictingSignals,
       },
     },

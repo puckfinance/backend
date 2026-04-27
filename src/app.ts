@@ -33,8 +33,15 @@ export const run = async () => {
   const app = express();
 
   // Set timeout to prevent long-running requests from causing the server to hang
+  // SSE streaming endpoints handle their own timeouts via req.clearTimeout()
   const timeoutDuration = process.env.TIMEOUT || '60000';
   app.use(timeout(timeoutDuration));
+
+  // Skip connect-timeout for SSE streaming routes
+  app.use('/api/v1/ai/analysis/stream', (req, _res, next) => {
+    if (req.clearTimeout) req.clearTimeout();
+    next();
+  });
 
   // Add request ID middleware for better logging and tracking
   app.use((req, res, next) => {

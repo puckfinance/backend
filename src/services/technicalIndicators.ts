@@ -103,13 +103,13 @@ export interface TimeframeIndicators {
   emaTrend: 'strong_bullish' | 'bullish' | 'neutral' | 'bearish' | 'strong_bearish';
 }
 
+export type Timeframe = '1d' | '4h' | '1h' | '15m' | '5m';
+
 export interface IndicatorSuite {
-  '1h': TimeframeIndicators;
-  '4h': TimeframeIndicators;
-  '1d': TimeframeIndicators;
+  timeframes: Partial<Record<Timeframe, TimeframeIndicators>>;
   confluence: {
     overallTrend: 'strong_bullish' | 'bullish' | 'neutral' | 'bearish' | 'strong_bearish';
-    alignedTimeframes: number; // how many TFs agree on direction
+    alignedTimeframes: number;
     conflictingSignals: string[];
   };
 }
@@ -639,52 +639,70 @@ function computeForTimeframe(candles: Candle[], timeframe: string): TimeframeInd
 // =============================================================================
 
 export function computeAllIndicators(
-  dailyCandles: Candle[],
-  h4Candles: Candle[],
-  h1Candles: Candle[] = []
+  candleMap: Partial<Record<Timeframe, Candle[]>>
 ): IndicatorSuite {
-  const daily = computeForTimeframe(dailyCandles, '1d');
-  const h4 = computeForTimeframe(h4Candles, '4h');
-  const h1 = computeForTimeframe(h1Candles, '1h');
+  const timeframes: Partial<Record<Timeframe, TimeframeIndicators>> = {};
+
+  // Compute indicators for each provided timeframe
+  for (const tf of Object.keys(candleMap) as Timeframe[]) {
+    const candles = candleMap[tf];
+    if (candles && candles.length > 0) {
+      timeframes[tf] = computeForTimeframe(candles, tf);
+    }
+  }
 
   // Confluence: count how many timeframes agree on trend direction
-  const trends = [daily.emaTrend, h4.emaTrend, h1.emaTrend];
+  const trends = Object.values(timeframes).map((tf) => tf.emaTrend);
   const bullishCount = trends.filter((t) => t.includes('bullish')).length;
   const bearishCount = trends.filter((t) => t.includes('bearish')).length;
+  const totalTrends = bullishCount + bearishCount;
 
   let overallTrend: IndicatorSuite['confluence']['overallTrend'] = 'neutral';
-  if (bullishCount === 3) overallTrend = 'strong_bullish';
-  else if (bullishCount >= 2) overallTrend = 'bullish';
-  else if (bearishCount === 3) overallTrend = 'strong_bearish';
-  else if (bearishCount >= 2) overallTrend = 'bearish';
+  if (totalTrends === 0) {
+    overallTrend = 'neutral';
+  } else if (bullishCount === totalTrends) {
+    overallTrend = 'strong_bullish';
+  } else if (bullishCount >= Math.ceil(totalTrends * 0.67)) {
+    overallTrend = 'bullish';
+  } else if (bearishCount === totalTrends) {
+    overallTrend = 'strong_bearish';
+  } else if (bearishCount >= Math.ceil(totalTrends * 0.67)) {
+    overallTrend = 'bearish';
+  }
 
   const alignedTimeframes = Math.max(bullishCount, bearishCount);
 
   // Detect conflicting signals
   const conflictingSignals: string[] = [];
-  if (daily.emaTrend.includes('bullish') && h4.emaTrend.includes('bearish')) {
-    conflictingSignals.push('Daily bullish but 4H bearish — potential pullback in uptrend');
+  const daily = timeframes['1d'];
+  const h4 = timeframes['4h'];
+
+  if (daily && h4) {
+    if (daily.emaTrend.includes('bullish') && h4.emaTrend.includes('bearish')) {
+      conflictingSignals.push('Daily bullish but 4H bearish — potential pullback in uptrend');
+    }
+    if (daily.emaTrend.includes('bearish') && h4.emaTrend.includes('bullish')) {
+      conflictingSignals.push('Daily bearish but 4H bullish — potential relief rally in downtrend');
+    }
   }
-  if (daily.emaTrend.includes('bearish') && h4.emaTrend.includes('bullish')) {
-    conflictingSignals.push('Daily bearish but 4H bullish — potential relief rally in downtrend');
-  }
-  if (daily.rsi.condition === 'overbought' && daily.macd.histogramFlipping) {
-    conflictingSignals.push('RSI overbought + MACD histogram flipping — bearish divergence warning');
-  }
-  if (daily.rsi.condition === 'oversold' && daily.macd.histogramFlipping) {
-    conflictingSignals.push('RSI oversold + MACD histogram flipping — bullish divergence opportunity');
-  }
-  if (daily.bollinger.squeeze) {
-    conflictingSignals.push('Bollinger squeeze on daily — big move incoming, direction uncertain');
-  }
-  if (daily.structure.lastCHoCH) {
-    conflictingSignals.push(`CHoCH detected on daily — ${daily.structure.lastCHoCH.direction} reversal signal at $${daily.structure.lastCHoCH.price.toLocaleString()}`);
+
+  if (daily) {
+    if (daily.rsi.condition === 'overbought' && daily.macd.histogramFlipping) {
+      conflictingSignals.push('RSI overbought + MACD histogram flipping — bearish divergence warning');
+    }
+    if (daily.rsi.condition === 'oversold' && daily.macd.histogramFlipping) {
+      conflictingSignals.push('RSI oversold + MACD histogram flipping — bullish divergence opportunity');
+    }
+    if (daily.bollinger.squeeze) {
+      conflictingSignals.push('Bollinger squeeze on daily — big move incoming, direction uncertain');
+    }
+    if (daily.structure.lastCHoCH) {
+      conflictingSignals.push(`CHoCH detected on daily — ${daily.structure.lastCHoCH.direction} reversal signal at $${daily.structure.lastCHoCH.price.toLocaleString()}`);
+    }
   }
 
   return {
-    '1h': h1,
-    '4h': h4,
-    '1d': daily,
+    timeframes,
     confluence: { overallTrend, alignedTimeframes, conflictingSignals },
   };
 }
