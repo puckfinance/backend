@@ -161,6 +161,178 @@ export default () => {
   });
 
   // -------------------------------------------------------------------------
+  // POST /api/v1/analysis-history/backtest — Batch evaluate trades in date range
+  // -------------------------------------------------------------------------
+  router.post('/backtest', async (req: Request, res: Response) => {
+    try {
+      const bodySchema = z.object({
+        from: z.string().min(1),
+        to: z.string().min(1),
+        symbol: z.string().optional(),
+      });
+
+      const { from, to, symbol } = bodySchema.parse(req.body);
+      const fromDate = new Date(from);
+      const toDate = new Date(to);
+
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        return res.status(400).json({ success: false, error: 'Invalid date format' });
+      }
+
+      const where: any = {
+        createdAt: { gte: fromDate, lte: toDate },
+        tradeAlertActive: true,
+        tradeAlertDirection: { in: ['LONG', 'SHORT'] },
+        tradeAlertEntryPrice: { not: null },
+        tradeAlertStopLoss: { not: null },
+        tradeAlertTakeProfit: { not: null },
+      };
+      if (symbol) where.symbol = symbol.toUpperCase();
+
+      const analyses = await prisma.marketAnalysis.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          createdAt: true,
+          symbol: true,
+          price: true,
+          tradeAlertDirection: true,
+          tradeAlertEntryPrice: true,
+          tradeAlertStopLoss: true,
+          tradeAlertTakeProfit: true,
+          tradeAlertRiskReward: true,
+          tradeAlertSetup: true,
+          overallVerdict: true,
+          confidenceScore: true,
+        },
+      });
+
+      const endTimeMs = toDate.getTime();
+
+      const trades: Array<{
+        id: string;
+        symbol: string;
+        createdAt: string;
+        direction: string;
+        entryPrice: number;
+        stopLoss: number;
+        takeProfit: number;
+        riskReward: number | null;
+        result: TradeResult;
+        hitAt: string | null;
+        entryHit: boolean;
+        setup: string | null;
+        verdict: string | null;
+        confidence: number | null;
+        error?: string;
+      }> = [];
+
+      let wins = 0;
+      let losses = 0;
+      let pending = 0;
+      let entryNotHit = 0;
+
+      for (const a of analyses) {
+        const entryPrice = a.tradeAlertEntryPrice!;
+        const sl = a.tradeAlertStopLoss!;
+        const tp = a.tradeAlertTakeProfit!;
+        const direction = a.tradeAlertDirection as 'LONG' | 'SHORT';
+
+        const startTimeMs = new Date(a.createdAt).getTime();
+
+        let result: TradeResult = 'PENDING';
+        let hitAt: string | null = null;
+        let entryHitFlag = false;
+        let errorMsg: string | undefined;
+
+        try {
+          const klines = await fetchBinanceKlines(a.symbol, startTimeMs, endTimeMs);
+          result = evaluateTrade(klines, direction, entryPrice, sl, tp);
+
+          if (klines.length > 0) {
+            let foundEntry = false;
+            for (const k of klines) {
+              const high = parseFloat(k.high);
+              const low = parseFloat(k.low);
+              if (!foundEntry) {
+                if (direction === 'LONG' && low <= entryPrice) foundEntry = true;
+                else if (direction === 'SHORT' && high >= entryPrice) foundEntry = true;
+                if (!foundEntry) continue;
+              }
+            }
+            entryHitFlag = foundEntry;
+          }
+
+          if (result === 'WIN' || result === 'LOSS') {
+            const hitKline = klines.find((k) => {
+              const high = parseFloat(k.high);
+              const low = parseFloat(k.low);
+              if (direction === 'LONG') {
+                return (result === 'WIN' && high >= tp) || (result === 'LOSS' && low <= sl);
+              }
+              return (result === 'WIN' && low <= tp) || (result === 'LOSS' && high >= sl);
+            });
+            hitAt = hitKline ? new Date(hitKline.openTime).toISOString() : null;
+          }
+        } catch (err: any) {
+          errorMsg = err.message;
+        }
+
+        if (result === 'WIN') wins++;
+        else if (result === 'LOSS') losses++;
+        else if (result === 'PENDING' && !entryHitFlag) entryNotHit++;
+        else pending++;
+
+        trades.push({
+          id: a.id,
+          symbol: a.symbol,
+          createdAt: a.createdAt.toISOString(),
+          direction: a.tradeAlertDirection!,
+          entryPrice,
+          stopLoss: sl,
+          takeProfit: tp,
+          riskReward: a.tradeAlertRiskReward,
+          result,
+          hitAt,
+          entryHit: entryHitFlag,
+          setup: a.tradeAlertSetup,
+          verdict: a.overallVerdict,
+          confidence: a.confidenceScore,
+          error: errorMsg,
+        });
+      }
+
+      const totalEvaluated = wins + losses;
+      const winRate = totalEvaluated > 0 ? (wins / totalEvaluated) * 100 : 0;
+      const avgRiskReward = trades
+        .filter((t) => t.riskReward != null)
+        .reduce((sum, t) => sum + t.riskReward!, 0) / (trades.filter((t) => t.riskReward != null).length || 1);
+
+      return res.status(200).json({
+        success: true,
+        summary: {
+          totalAnalyses: analyses.length,
+          wins,
+          losses,
+          pending,
+          entryNotHit,
+          winRate: Math.round(winRate * 100) / 100,
+          avgRiskReward: Math.round(avgRiskReward * 100) / 100,
+          dateRange: { from: fromDate.toISOString(), to: toDate.toISOString() },
+        },
+        trades,
+      });
+    } catch (error: any) {
+      logger.error('Error running backtest:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to run backtest',
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // GET /api/v1/analysis-history/:id/trade-result — Check if trade hit TP/SL
   // -------------------------------------------------------------------------
   router.get('/:id/trade-result', async (req: Request, res: Response) => {
