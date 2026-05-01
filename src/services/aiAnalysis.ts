@@ -8,7 +8,7 @@
  * @createdDate 2026-04-06
  */
 
-import { generateText, streamText, Output, tool, stepCountIs } from 'ai';
+import { generateText, streamText, Output, tool } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { getCoinGeckoMarketData, getDeFiLlamaProtocols, getTotalDeFiTVL } from './whaleTracker';
@@ -854,7 +854,6 @@ export async function streamAIAnalysis(symbol: string = 'BTC', tfSet: TimeframeS
     temperature: 0,
     tools: { generateTradeAlert: tradeAlertTool },
     toolChoice: 'required',
-    stopWhen: stepCountIs(2),
   });
 
   return {
@@ -1180,7 +1179,6 @@ export async function streamBacktestAnalysis(symbol: string, targetDate: Date, t
     temperature: 0,
     tools: { generateTradeAlert: tradeAlertTool },
     toolChoice: 'required',
-    stopWhen: stepCountIs(2),
   });
   return {
     stream: result,
