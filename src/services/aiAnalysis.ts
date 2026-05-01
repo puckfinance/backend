@@ -784,17 +784,21 @@ export async function extractTradeAlert(analysisText: string): Promise<{
       output: Output.object({
         schema: StreamedTradeAlertSchema as any,
       }),
-      prompt: `Extract the trade setup / trade alert from the following AI market analysis text.
+        prompt: `You are a trade signal extractor. Read the following market analysis and extract ANY trade signal, recommendation, or setup mentioned.
 
-If the analysis contains specific entry, stop loss, and take profit levels, set active to true and fill in all fields.
-If no clear trade setup exists, set active to false and all numeric fields to null.
+IMPORTANT: Even if the analysis is cautious or conditional, if it mentions ANY direction (bullish/bearish/long/short), entry zone, support/resistance levels, or stop loss / take profit targets, you MUST extract them into a trade alert with active=true.
+
+If the analysis says "NEUTRAL" or explicitly says "no trade" or "stay out", then set active=false.
+If the analysis provides a direction (long/short), entry price or zone, stop loss, or take profit targets — even conditionally — set active=true.
 
 Rules:
-- direction must be LONG, SHORT, or NONE
-- entryPrice, stopLoss, takeProfit are dollar amounts (numbers) or null
-- riskRewardRatio is the reward-to-risk ratio as a number (e.g. 2.5 means 2.5:1) or null
-- tradeSetup is a brief description of the setup type (e.g. "Breakout retest", "Pullback to support")
-- reasoning is a 1-2 sentence explanation
+- direction: LONG if bullish/long recommended, SHORT if bearish/short recommended, NONE only if truly no directional bias
+- entryPrice: Use the current price or the entry level mentioned (a number, not null, if active)
+- stopLoss: Use the stop loss level mentioned or nearest support (for long) / resistance (for short)
+- takeProfit: Use the take profit target mentioned or next resistance (for long) / support (for short)
+- riskRewardRatio: Calculate (TP - Entry) / (Entry - SL) as a number
+- tradeSetup: Brief description of the setup
+- reasoning: 1-2 sentence explanation from the analysis
 
 ANALYSIS TEXT:
 ${analysisText}`,
@@ -810,17 +814,21 @@ ${analysisText}`,
         output: Output.object({
           schema: StreamedTradeAlertSchema as any,
         }),
-        prompt: `Extract the trade setup / trade alert from the following AI market analysis text.
+      prompt: `You are a trade signal extractor. Read the following market analysis and extract ANY trade signal, recommendation, or setup mentioned.
 
-If the analysis contains specific entry, stop loss, and take profit levels, set active to true and fill in all fields.
-If no clear trade setup exists, set active to false and all numeric fields to null.
+IMPORTANT: Even if the analysis is cautious or conditional, if it mentions ANY direction (bullish/bearish/long/short), entry zone, support/resistance levels, or stop loss / take profit targets, you MUST extract them into a trade alert with active=true.
+
+If the analysis says "NEUTRAL" or explicitly says "no trade" or "stay out", then set active=false.
+If the analysis provides a direction (long/short), entry price or zone, stop loss, or take profit targets — even conditionally — set active=true.
 
 Rules:
-- direction must be LONG, SHORT, or NONE
-- entryPrice, stopLoss, takeProfit are dollar amounts (numbers) or null
-- riskRewardRatio is the reward-to-risk ratio as a number (e.g. 2.5 means 2.5:1) or null
-- tradeSetup is a brief description of the setup type (e.g. "Breakout retest", "Pullback to support")
-- reasoning is a 1-2 sentence explanation
+- direction: LONG if bullish/long recommended, SHORT if bearish/short recommended, NONE only if truly no directional bias
+- entryPrice: Use the current price or the entry level mentioned (a number, not null, if active)
+- stopLoss: Use the stop loss level mentioned or nearest support (for long) / resistance (for short)
+- takeProfit: Use the take profit target mentioned or next resistance (for long) / support (for short)
+- riskRewardRatio: Calculate (TP - Entry) / (Entry - SL) as a number
+- tradeSetup: Brief description of the setup
+- reasoning: 1-2 sentence explanation from the analysis
 
 ANALYSIS TEXT:
 ${analysisText}`,
