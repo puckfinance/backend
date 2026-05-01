@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessageStreamWriter } from 'ai';
-import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis, streamBacktestAnalysis, type TimeframeSet } from '../services/aiAnalysis';
+import { getAIAnalysis, getAIQuickSummary, streamAIAnalysis, streamBacktestAnalysis, extractTradeAlert, type TimeframeSet } from '../services/aiAnalysis';
 import { evaluateTrade, fetchBinanceKlines } from './MarketAnalysisHistoryController';
 import { saveAnalysis } from '../services/analysisHistory';
 import logger from '../utils/Logger';
@@ -97,16 +97,6 @@ export default () => {
                     } as any);
 
                     let fullAnalysisText = '';
-                    let tradeAlert: any = {
-                        active: false,
-                        direction: 'NONE',
-                        entryPrice: null,
-                        stopLoss: null,
-                        takeProfit: null,
-                        riskRewardRatio: null,
-                        tradeSetup: '',
-                        reasoning: '',
-                    };
 
                     const textStream = stream.toUIMessageStream();
                     const reader = textStream.getReader();
@@ -118,14 +108,13 @@ export default () => {
                             if ((value as any).type === 'text-delta') {
                                 fullAnalysisText += (value as any).textDelta;
                             }
-                            if ((value as any).type === 'tool-call' && (value as any).toolName === 'generateTradeAlert') {
-                                tradeAlert = (value as any).args;
-                            }
                             writer.write(value);
                         }
                     } finally {
                         reader.releaseLock();
                     }
+
+                    const tradeAlert = await extractTradeAlert(fullAnalysisText);
 
                     writer.write({
                         type: 'data-tradeAlert',
@@ -235,16 +224,6 @@ export default () => {
                     } as any);
 
                     let fullAnalysisText = '';
-                    let tradeAlert: any = {
-                        active: false,
-                        direction: 'NONE',
-                        entryPrice: null,
-                        stopLoss: null,
-                        takeProfit: null,
-                        riskRewardRatio: null,
-                        tradeSetup: '',
-                        reasoning: '',
-                    };
 
                     const textStream = stream.toUIMessageStream();
                     const reader = textStream.getReader();
@@ -256,14 +235,13 @@ export default () => {
                             if ((value as any).type === 'text-delta') {
                                 fullAnalysisText += (value as any).textDelta;
                             }
-                            if ((value as any).type === 'tool-call' && (value as any).toolName === 'generateTradeAlert') {
-                                tradeAlert = (value as any).args;
-                            }
                             writer.write(value);
                         }
                     } finally {
                         reader.releaseLock();
                     }
+
+                    const tradeAlert = await extractTradeAlert(fullAnalysisText);
 
                     writer.write({
                         type: 'data-tradeAlert',
