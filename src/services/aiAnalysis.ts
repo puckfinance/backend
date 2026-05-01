@@ -8,7 +8,7 @@
  * @createdDate 2026-04-06
  */
 
-import { generateText, streamText, Output } from 'ai';
+import { generateText, streamText, Output, tool, stepCountIs } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { getCoinGeckoMarketData, getDeFiLlamaProtocols, getTotalDeFiTVL } from './whaleTracker';
@@ -750,7 +750,9 @@ ${
 - **Verdict**: STRONG_BUY / BUY / NEUTRAL / SELL / STRONG_SELL with confidence score (0-100)
 - **Key Level to Watch**: Specific price level with explanation
 
-Be concise but thorough. Use bold for important numbers and levels. Format for readability.`;
+Be concise but thorough. Use bold for important numbers and levels. Format for readability.
+
+IMPORTANT: After writing your analysis, you MUST call the generateTradeAlert tool to produce a structured trade signal. Even if there is no clear setup, call it with active=false and direction=NONE.`;
 }
 
 // =============================================================================
@@ -818,6 +820,25 @@ ${analysisText}`,
 }
 
 // =============================================================================
+// TRADE ALERT TOOL (used by streamText for forced tool calling)
+// =============================================================================
+
+const tradeAlertTool = tool({
+    description: `Generate a structured trade alert / signal based on your analysis. You MUST call this tool at the end of your analysis to produce a trade signal. Even if there is no clear setup, call it with active=false and direction=NONE.`,
+    inputSchema: z.object({
+        active: z.boolean(),
+        direction: z.enum(['LONG', 'SHORT', 'NONE']),
+        entryPrice: z.union([z.number(), z.null()]),
+        stopLoss: z.union([z.number(), z.null()]),
+        takeProfit: z.union([z.number(), z.null()]),
+        riskRewardRatio: z.union([z.number(), z.null()]),
+        tradeSetup: z.string(),
+        reasoning: z.string(),
+    }) as any,
+    execute: async (args: any) => args,
+});
+
+// =============================================================================
 // STREAMING ANALYSIS FUNCTION
 // =============================================================================
 
@@ -831,6 +852,9 @@ export async function streamAIAnalysis(symbol: string = 'BTC', tfSet: TimeframeS
     model: google(MODEL_ID),
     prompt,
     temperature: 0,
+    tools: { generateTradeAlert: tradeAlertTool },
+    toolChoice: 'required',
+    stopWhen: stepCountIs(2),
   });
 
   return {
@@ -1140,7 +1164,9 @@ Provide a specific trade setup:
 - **Verdict**: STRONG_BUY / BUY / NEUTRAL / SELL / STRONG_SELL with confidence (0-100)
 - Key level to watch
 
-Be concise. Use bold for key levels.`;
+Be concise. Use bold for key levels.
+
+IMPORTANT: After writing your analysis, you MUST call the generateTradeAlert tool to produce a structured trade signal. Even if there is no clear setup, call it with active=false and direction=NONE.`;
 }
 
 export async function streamBacktestAnalysis(symbol: string, targetDate: Date, tfSet: TimeframeSet = 'all') {
@@ -1152,8 +1178,10 @@ export async function streamBacktestAnalysis(symbol: string, targetDate: Date, t
     model: google(MODEL_ID),
     prompt,
     temperature: 0,
+    tools: { generateTradeAlert: tradeAlertTool },
+    toolChoice: 'required',
+    stopWhen: stepCountIs(2),
   });
-
   return {
     stream: result,
     marketData: {
