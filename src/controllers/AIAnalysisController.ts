@@ -23,7 +23,6 @@ export default () => {
 
             const analysis = await getAIAnalysis(symbol.toUpperCase());
 
-            // Auto-save to database (fire-and-forget)
             saveAnalysis({
                 symbol: analysis.symbol,
                 price: analysis.marketOverview.price,
@@ -54,8 +53,21 @@ export default () => {
                 bollingerPercentB: 0.5,
                 atr: 0,
                 vwapRelation: 'below',
+                aiInsights: analysis.aiInsights,
                 overallVerdict: analysis.summary.overallVerdict,
                 confidenceScore: analysis.summary.confidenceScore,
+                shortTermOutlook: analysis.summary.shortTermOutlook,
+                mediumTermOutlook: analysis.summary.mediumTermOutlook,
+                keyLevelToWatch: analysis.summary.keyLevelToWatch,
+                recommendedStrategy: analysis.summary.recommendedStrategy,
+                tradeAlertActive: analysis.tradeAlert.active,
+                tradeAlertDirection: analysis.tradeAlert.direction,
+                tradeAlertEntryPrice: analysis.tradeAlert.entryPrice,
+                tradeAlertStopLoss: analysis.tradeAlert.stopLoss,
+                tradeAlertTakeProfit: analysis.tradeAlert.takeProfit,
+                tradeAlertRiskReward: analysis.tradeAlert.riskRewardRatio,
+                tradeAlertSetup: analysis.tradeAlert.tradeSetup,
+                tradeAlertReasoning: analysis.tradeAlert.reasoning,
             }).catch((err) => logger.error('Background save failed:', err));
 
             return res.status(200).json({
@@ -105,8 +117,9 @@ export default () => {
                         while (true) {
                             const { done, value } = await reader.read();
                             if (done) break;
-                            if ((value as any).type === 'text-delta') {
-                                fullAnalysisText += (value as any).textDelta;
+                            const v = value as any;
+                            if (v.type === 'text-delta') {
+                                fullAnalysisText += (v.delta ?? v.textDelta ?? '');
                             }
                             writer.write(value);
                         }
@@ -232,8 +245,9 @@ export default () => {
                         while (true) {
                             const { done, value } = await reader.read();
                             if (done) break;
-                            if ((value as any).type === 'text-delta') {
-                                fullAnalysisText += (value as any).textDelta;
+                            const v = value as any;
+                            if (v.type === 'text-delta') {
+                                fullAnalysisText += (v.delta ?? v.textDelta ?? '');
                             }
                             writer.write(value);
                         }

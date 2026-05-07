@@ -333,6 +333,52 @@ export default () => {
   });
 
   // -------------------------------------------------------------------------
+  // GET /api/v1/analysis-history/stats/summary — Aggregate stats
+  // NOTE: Must be before /:id to avoid route shadowing
+  // -------------------------------------------------------------------------
+  router.get('/stats/summary', async (_req: Request, res: Response) => {
+    try {
+      const [totalCount, symbolBreakdown, recentVerdicts] = await Promise.all([
+        prisma.marketAnalysis.count(),
+        prisma.marketAnalysis.groupBy({
+          by: ['symbol'],
+          _count: { symbol: true },
+          orderBy: { _count: { symbol: 'desc' } },
+        }),
+        prisma.marketAnalysis.findMany({
+          where: { overallVerdict: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            symbol: true,
+            overallVerdict: true,
+            confidenceScore: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          totalAnalyses: totalCount,
+          symbolBreakdown: symbolBreakdown.map((s) => ({
+            symbol: s.symbol,
+            count: s._count.symbol,
+          })),
+          recentVerdicts,
+        },
+      });
+    } catch (error: any) {
+      logger.error('Error getting analysis stats:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to get stats',
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // GET /api/v1/analysis-history/:id/trade-result — Check if trade hit TP/SL
   // -------------------------------------------------------------------------
   router.get('/:id/trade-result', async (req: Request, res: Response) => {
@@ -495,51 +541,6 @@ export default () => {
       return res.status(500).json({
         success: false,
         error: error.message || 'Failed to delete analysis',
-      });
-    }
-  });
-
-  // -------------------------------------------------------------------------
-  // GET /api/v1/analysis-history/stats/summary — Aggregate stats
-  // -------------------------------------------------------------------------
-  router.get('/stats/summary', async (_req: Request, res: Response) => {
-    try {
-      const [totalCount, symbolBreakdown, recentVerdicts] = await Promise.all([
-        prisma.marketAnalysis.count(),
-        prisma.marketAnalysis.groupBy({
-          by: ['symbol'],
-          _count: { symbol: true },
-          orderBy: { _count: { symbol: 'desc' } },
-        }),
-        prisma.marketAnalysis.findMany({
-          where: { overallVerdict: { not: null } },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-          select: {
-            symbol: true,
-            overallVerdict: true,
-            confidenceScore: true,
-            createdAt: true,
-          },
-        }),
-      ]);
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          totalAnalyses: totalCount,
-          symbolBreakdown: symbolBreakdown.map((s) => ({
-            symbol: s.symbol,
-            count: s._count.symbol,
-          })),
-          recentVerdicts,
-        },
-      });
-    } catch (error: any) {
-      logger.error('Error getting analysis stats:', error);
-      return res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to get stats',
       });
     }
   });
